@@ -8,8 +8,15 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+import logging
+
 from app.database import Database
+from app.feed_bot import post_to_feed
 from app.routes.user import get_current_user
+
+logger = logging.getLogger(__name__)
+
+MIN_WIN_MULTIPLIER = 2.0  # Only post wins with 2x+ multiplier to feed
 
 router = APIRouter(prefix="/api/mines", tags=["mines"])
 
@@ -163,6 +170,7 @@ async def reveal_cell(req: RevealRequest, user: dict = Depends(get_current_user)
 
     if all_safe_revealed:
         payout = game["bet"] * new_multiplier
+        win_profit = payout - game["bet"]
         await _db.add_balance(user["user_id"], payout)
         await _db.update_mines_game(
             game["id"],
@@ -171,13 +179,15 @@ async def reveal_cell(req: RevealRequest, user: dict = Depends(get_current_user)
             status="won",
             finished_at=time.time(),
         )
+        if new_multiplier >= MIN_WIN_MULTIPLIER and win_profit > 0:
+            await _post_mines_win(user, win_profit, game["mines_count"], new_multiplier)
         return {
             "result": "win_all",
             "cell": req.cell,
             "mines": mines,
             "revealed": revealed,
             "multiplier": new_multiplier,
-            "profit": payout - game["bet"],
+            "profit": win_profit,
             "game_over": True,
             "server_seed": game["server_seed"],
         }
@@ -222,8 +232,12 @@ async def cashout(user: dict = Depends(get_current_user)):
         finished_at=time.time(),
     )
 
+    profit = payout - game["bet"]
+    if multiplier >= MIN_WIN_MULTIPLIER and profit > 0:
+        await _post_mines_win(user, profit, game["mines_count"], multiplier)
+
     return {
-        "profit": payout - game["bet"],
+        "profit": profit,
         "payout": payout,
         "multiplier": multiplier,
         "mines": mines,
@@ -260,3 +274,32 @@ async def game_history(user: dict = Depends(get_current_user)):
     assert _db is not None
     games = await _db.get_mines_history(user["user_id"])
     return {"games": games}
+
+
+async def _post_mines_win(
+    user: dict, profit: float, mines_count: int, multiplier: float
+) -> None:
+    """Post big mines wins to feed channel and public feed."""
+    username = user.get("username", "") or user.get("first_name", "") or f"User{user['user_id']}"
+    try:
+        await post_to_feed(
+            "mines_win",
+            username=username,
+            profit=profit,
+            mines_count=mines_count,
+            multiplier=multiplier,
+        )
+    except Exception as e:
+        logger.warning("Feed post error (mines_win): %s", e)
+
+    if _db:
+        try:
+            display = username if len(username) <= 5 else username[:3] + "***" + username[-2:]
+            await _db.add_feed_entry(
+                event_type="mines_win",
+                display_name=display,
+                amount=profit,
+                profit=profit,
+            )
+        except Exception as e:
+            logger.warning("Feed entry error (mines_win): %s", e)

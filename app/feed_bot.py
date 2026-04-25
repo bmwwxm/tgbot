@@ -44,6 +44,12 @@ FEED_TEMPLATES = {
             "🤝 <b>Реферальный бонус</b>\n\n"
             "Начислено: <b>+{amount:.4f} TON</b>"
         ),
+        "mines_win": (
+            "💣💰 <b>Выигрыш в минах!</b>\n\n"
+            "@{username} только что поднял <b>{profit:.4f} TON</b> "
+            "на <b>{mines_count}</b> минах!\n"
+            "Множитель: <b>{multiplier:.2f}x</b>"
+        ),
     },
     "en": {
         "deposit_received": (
@@ -66,6 +72,12 @@ FEED_TEMPLATES = {
         "referral_bonus": (
             "🤝 <b>Referral Bonus</b>\n\n"
             "Credited: <b>+{amount:.4f} TON</b>"
+        ),
+        "mines_win": (
+            "💣💰 <b>Mines Win!</b>\n\n"
+            "@{username} just won <b>{profit:.4f} TON</b> "
+            "with <b>{mines_count}</b> mines!\n"
+            "Multiplier: <b>{multiplier:.2f}x</b>"
         ),
     },
 }
