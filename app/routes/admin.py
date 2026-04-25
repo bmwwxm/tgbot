@@ -104,7 +104,12 @@ async def adjust_balance(req: BalanceAdjust, admin: dict = Depends(require_admin
     user = await _db.get_user(req.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    await _db.add_balance(req.user_id, req.amount)
+    if req.amount < 0:
+        ok = await _db.deduct_balance_safe(req.user_id, abs(req.amount))
+        if not ok:
+            raise HTTPException(status_code=400, detail="Insufficient balance for deduction")
+    else:
+        await _db.add_balance(req.user_id, req.amount)
     updated = await _db.get_user(req.user_id)
     return {
         "status": "ok",

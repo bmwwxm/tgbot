@@ -136,6 +136,28 @@ class Database:
         )
         await self.db.commit()
 
+    async def deduct_balance_safe(self, user_id: int, amount: float) -> bool:
+        """Atomically deduct balance only if sufficient funds. Returns True on success."""
+        assert self.db is not None
+        cur = await self.db.execute(
+            "UPDATE users SET balance = balance - ? WHERE user_id = ? AND balance >= ?",
+            (amount, user_id, amount),
+        )
+        await self.db.commit()
+        return cur.rowcount > 0
+
+    async def add_balance_field(self, user_id: int, field: str, delta: float) -> None:
+        """Atomically increment a numeric user field (total_earned, referral_earnings, etc)."""
+        assert self.db is not None
+        allowed = {"total_earned", "total_withdrawn", "referral_earnings", "total_deposited"}
+        if field not in allowed:
+            raise ValueError(f"Field {field} not allowed")
+        await self.db.execute(
+            f"UPDATE users SET {field} = {field} + ? WHERE user_id = ?",
+            (delta, user_id),
+        )
+        await self.db.commit()
+
     async def get_user_count(self) -> int:
         assert self.db is not None
         cur = await self.db.execute("SELECT COUNT(*) as c FROM users")
@@ -207,11 +229,18 @@ class Database:
         await self.db.commit()
         return cur.lastrowid or 0
 
-    async def get_matured_deposits(self) -> list[dict[str, Any]]:
+    async def claim_matured_deposits(self) -> list[dict[str, Any]]:
+        """Atomically claim matured deposits by setting status to 'processing'.
+        Returns only newly claimed deposits, preventing double-payout."""
         assert self.db is not None
+        now = time.time()
+        await self.db.execute(
+            "UPDATE deposits SET status = 'processing' WHERE status = 'pending' AND matures_at <= ?",
+            (now,),
+        )
+        await self.db.commit()
         cur = await self.db.execute(
-            "SELECT * FROM deposits WHERE status = 'pending' AND matures_at <= ?",
-            (time.time(),),
+            "SELECT * FROM deposits WHERE status = 'processing'"
         )
         return [dict(r) for r in await cur.fetchall()]
 
@@ -275,12 +304,41 @@ class Database:
         )
         await self.db.commit()
 
-    async def get_pending_withdrawals(self) -> list[dict[str, Any]]:
+    async def fail_withdrawal_and_refund(self, wid: int, user_id: int, amount: float) -> None:
+        """Atomically mark withdrawal as failed and refund the balance."""
         assert self.db is not None
+        await self.db.execute(
+            "UPDATE withdrawals SET status='failed', completed_at=? WHERE id=?",
+            (time.time(), wid),
+        )
+        await self.db.execute(
+            "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+            (amount, user_id),
+        )
+        await self.db.commit()
+
+    async def claim_pending_withdrawals(self) -> list[dict[str, Any]]:
+        """Atomically claim pending withdrawals for processing."""
+        assert self.db is not None
+        await self.db.execute(
+            "UPDATE withdrawals SET status='processing' WHERE status='pending'"
+        )
+        await self.db.commit()
         cur = await self.db.execute(
-            "SELECT * FROM withdrawals WHERE status='pending' ORDER BY created_at"
+            "SELECT * FROM withdrawals WHERE status='processing' ORDER BY created_at"
         )
         return [dict(r) for r in await cur.fetchall()]
+
+    async def count_recent_withdrawals(self, user_id: int, seconds: int = 60) -> int:
+        """Count recent withdrawal requests for rate limiting."""
+        assert self.db is not None
+        since = time.time() - seconds
+        cur = await self.db.execute(
+            "SELECT COUNT(*) as c FROM withdrawals WHERE user_id = ? AND created_at > ?",
+            (user_id, since),
+        )
+        row = await cur.fetchone()
+        return row["c"] if row else 0
 
     async def get_user_withdrawals(self, user_id: int) -> list[dict[str, Any]]:
         assert self.db is not None

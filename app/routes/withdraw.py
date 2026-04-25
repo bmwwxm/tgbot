@@ -37,12 +37,18 @@ async def create_withdrawal(
             status_code=400,
             detail=f"Minimum withdrawal: {min_withdrawal} TON",
         )
-    if req.amount > user["balance"]:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
     if not req.to_address or len(req.to_address) < 20:
         raise HTTPException(status_code=400, detail="Invalid TON address")
 
-    await _db.add_balance(user["user_id"], -req.amount)
+    recent = await _db.count_recent_withdrawals(user["user_id"], seconds=60)
+    if recent >= 3:
+        raise HTTPException(
+            status_code=429, detail="Too many withdrawal requests. Wait 1 minute."
+        )
+
+    deducted = await _db.deduct_balance_safe(user["user_id"], req.amount)
+    if not deducted:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
 
     wid = await _db.add_withdrawal(
         user_id=user["user_id"],

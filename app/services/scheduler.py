@@ -79,7 +79,7 @@ async def _monitor_deposits() -> None:
 
 async def _process_matured_deposits() -> None:
     assert _db is not None
-    matured = await _db.get_matured_deposits()
+    matured = await _db.claim_matured_deposits()
     profit_pct = await _get_effective_setting("profit_percent", config.profit_percent)
     ref_pct = await _get_effective_setting("referral_percent", config.referral_percent)
 
@@ -89,10 +89,7 @@ async def _process_matured_deposits() -> None:
         profit = amount * (profit_pct / 100.0)
 
         await _db.add_balance(user_id, amount + profit)
-        await _db.update_user(
-            user_id, total_earned=
-            (await _db.get_user(user_id) or {}).get("total_earned", 0) + profit
-        )
+        await _db.add_balance_field(user_id, "total_earned", profit)
         await _db.mark_deposit_paid(dep["id"], profit)
 
         logger.info(
@@ -123,13 +120,7 @@ async def _process_matured_deposits() -> None:
             referrer_id = user["referrer_id"]
             ref_bonus = profit * (ref_pct / 100.0)
             await _db.add_balance(referrer_id, ref_bonus)
-            await _db.update_user(
-                referrer_id,
-                referral_earnings=(
-                    (await _db.get_user(referrer_id) or {}).get("referral_earnings", 0)
-                    + ref_bonus
-                ),
-            )
+            await _db.add_balance_field(referrer_id, "referral_earnings", ref_bonus)
             logger.info(
                 "Referral bonus: referrer=%d bonus=%.4f from user=%d",
                 referrer_id, ref_bonus, user_id,
@@ -150,7 +141,7 @@ async def _process_matured_deposits() -> None:
 
 async def _process_withdrawals() -> None:
     assert _db is not None
-    pending = await _db.get_pending_withdrawals()
+    pending = await _db.claim_pending_withdrawals()
     for w in pending:
         wid = w["id"]
         user_id = w["user_id"]
@@ -160,7 +151,7 @@ async def _process_withdrawals() -> None:
         send_amount = amount - fee
 
         if send_amount <= 0:
-            await _db.mark_withdrawal_failed(wid)
+            await _db.fail_withdrawal_and_refund(wid, user_id, amount)
             continue
 
         try:
@@ -168,13 +159,7 @@ async def _process_withdrawals() -> None:
                 to_addr, send_amount, comment="GoodMoney withdrawal"
             )
             await _db.mark_withdrawal_sent(wid, tx_hash)
-            await _db.update_user(
-                user_id,
-                total_withdrawn=(
-                    (await _db.get_user(user_id) or {}).get("total_withdrawn", 0)
-                    + amount
-                ),
-            )
+            await _db.add_balance_field(user_id, "total_withdrawn", amount)
             logger.info(
                 "Withdrawal #%d sent: user=%d amount=%.4f to=%s",
                 wid, user_id, send_amount, to_addr,
@@ -196,8 +181,7 @@ async def _process_withdrawals() -> None:
 
         except Exception as e:
             logger.error("Withdrawal #%d failed: %s", wid, e)
-            await _db.mark_withdrawal_failed(wid)
-            await _db.add_balance(user_id, amount)
+            await _db.fail_withdrawal_and_refund(wid, user_id, amount)
             if _bot_notify:
                 try:
                     await _bot_notify(user_id, "withdrawal_failed", amount=amount)
