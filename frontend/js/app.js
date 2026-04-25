@@ -638,7 +638,7 @@ function switchAdminTab(tab) {
     if (tab === "stats") loadAdminStats();
     if (tab === "users") loadAdminUsers();
     if (tab === "settings") loadAdminSettings();
-    if (tab === "fakefeed") {}
+    if (tab === "fakefeed") updateFakeStatus();
 }
 
 // ── Utils ─────────────────────────────────────────────
@@ -951,27 +951,53 @@ async function minesCashout() {
 
 // ── Admin Fake Feed ───────────────────────────────────
 
-async function createFakeFeed() {
+async function launchFakeFeed() {
     const type = document.getElementById("fake-type").value;
-    const name = document.getElementById("fake-name").value;
-    const amount = parseFloat(document.getElementById("fake-amount").value);
-    const profit = parseFloat(document.getElementById("fake-profit").value) || 0;
+    const count = parseInt(document.getElementById("fake-count").value) || 10;
+    const period = parseInt(document.getElementById("fake-period").value) || 30;
+    const minAmt = parseFloat(document.getElementById("fake-min-amount").value) || 10;
+    const maxAmt = parseFloat(document.getElementById("fake-max-amount").value) || 100;
     const maturity = parseFloat(document.getElementById("fake-maturity").value) || 10;
 
     try {
-        await apiCall("/api/admin/fake-feed", "POST", {
+        const res = await apiCall("/api/admin/fake-feed", "POST", {
             event_type: type,
-            display_name: name,
-            amount: amount,
-            profit: profit,
+            count: count,
+            period_minutes: period,
+            min_amount: minAmt,
+            max_amount: maxAmt,
             maturity_hours: maturity,
         });
         document.getElementById("fake-feed-result").innerHTML =
-            `<p style="color:var(--success);margin-top:8px">${t("success")}!</p>`;
+            `<p style="color:var(--success);margin-top:8px">${res.message}</p>`;
         setTimeout(() => {
             document.getElementById("fake-feed-result").innerHTML = "";
-        }, 3000);
+        }, 4000);
+        updateFakeStatus();
     } catch (e) {
         showToast(e.message || t("error"), "error");
     }
+}
+
+async function stopFakeFeed() {
+    try {
+        await apiCall("/api/admin/fake-feed/stop", "POST");
+        showToast(t("success"), "success");
+        updateFakeStatus();
+    } catch (e) {
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+async function updateFakeStatus() {
+    try {
+        const res = await apiCall("/api/admin/fake-feed/status", "GET");
+        const el = document.getElementById("fake-feed-status");
+        if (res.running) {
+            el.style.display = "block";
+            document.getElementById("fake-status-text").textContent = t("fake_running");
+        } else {
+            el.style.display = "none";
+        }
+    } catch (e) {}
 }

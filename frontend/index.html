@@ -408,9 +408,13 @@
 
             <!-- Fake Feed -->
             <div id="admin-fakefeed" class="admin-panel">
-                <p style="color:var(--text-secondary);margin-bottom:12px">Create fake entries visible in the public feed on dashboard</p>
+                <p style="color:var(--text-secondary);margin-bottom:12px" data-i18n="fake_feed_desc">Schedule fake entries that appear gradually in the public feed</p>
+                <div id="fake-feed-status" style="display:none;padding:10px;border-radius:8px;background:rgba(108,92,231,0.2);margin-bottom:12px">
+                    <span style="color:var(--primary)">⏳</span> <span id="fake-status-text"></span>
+                    <button class="btn btn-accent" style="margin-left:8px;padding:4px 12px;font-size:12px" onclick="stopFakeFeed()">Stop</button>
+                </div>
                 <div class="input-group">
-                    <label>Type</label>
+                    <label data-i18n="fake_type">Type</label>
                     <select id="fake-type">
                         <option value="deposit">💎 Deposit</option>
                         <option value="payout">💰 Payout</option>
@@ -418,22 +422,26 @@
                     </select>
                 </div>
                 <div class="input-group">
-                    <label>Display Name (leave empty for random)</label>
-                    <input type="text" id="fake-name" placeholder="Alex***42">
+                    <label data-i18n="fake_count">Count</label>
+                    <input type="number" id="fake-count" value="10" min="1" max="200" step="1">
                 </div>
                 <div class="input-group">
-                    <label>Amount (TON)</label>
-                    <input type="number" id="fake-amount" value="25" min="0.1" step="0.1">
+                    <label data-i18n="fake_period">Period (minutes)</label>
+                    <input type="number" id="fake-period" value="30" min="1" step="1">
                 </div>
                 <div class="input-group">
-                    <label>Profit (TON, for payout type)</label>
-                    <input type="number" id="fake-profit" value="2.5" min="0" step="0.1">
+                    <label data-i18n="fake_min_amount">Min amount (TON)</label>
+                    <input type="number" id="fake-min-amount" value="10" min="0.1" step="0.1">
                 </div>
                 <div class="input-group">
-                    <label>Maturity (hours, for deposit type)</label>
+                    <label data-i18n="fake_max_amount">Max amount (TON)</label>
+                    <input type="number" id="fake-max-amount" value="100" min="0.1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_maturity">Maturity (hours, for deposit)</label>
                     <input type="number" id="fake-maturity" value="10" min="0.1" step="0.1">
                 </div>
-                <button class="btn btn-primary" onclick="createFakeFeed()">Create Fake Entry</button>
+                <button class="btn btn-primary" onclick="launchFakeFeed()">🚀 <span data-i18n="fake_launch">Launch</span></button>
                 <div id="fake-feed-result"></div>
             </div>
         </div>

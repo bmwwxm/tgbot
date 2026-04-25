@@ -87,6 +87,16 @@ const I18N = {
         all_safe: "All safe cells revealed!",
         cashout_success: "Cashed out!",
         invalid_mines: "Mines must be 1-24",
+        // Admin Fake Feed
+        fake_feed_desc: "Schedule fake entries that appear gradually in the public feed",
+        fake_type: "Type",
+        fake_count: "Count",
+        fake_period: "Period (minutes)",
+        fake_min_amount: "Min amount (TON)",
+        fake_max_amount: "Max amount (TON)",
+        fake_maturity: "Maturity (hours, for deposit)",
+        fake_launch: "Launch",
+        fake_running: "Fake feed is running...",
     },
     ru: {
         loading: "Загрузка...",
@@ -174,6 +184,16 @@ const I18N = {
         all_safe: "Все безопасные ячейки открыты!",
         cashout_success: "Выигрыш забран!",
         invalid_mines: "Мины: от 1 до 24",
+        // Admin Fake Feed
+        fake_feed_desc: "Запланировать фейковые записи, которые появятся постепенно в ленте",
+        fake_type: "Тип",
+        fake_count: "Количество",
+        fake_period: "Период (минуты)",
+        fake_min_amount: "Мин. сумма (TON)",
+        fake_max_amount: "Макс. сумма (TON)",
+        fake_maturity: "Срок (часы, для депозита)",
+        fake_launch: "Запустить",
+        fake_running: "Фейковая лента запущена...",
     },
 };
 

@@ -204,45 +204,126 @@ async def user_detail(user_id: int, admin: dict = Depends(require_admin)):
 
 # ── Fake Feed ───────────────────────────────────────────
 
-class FakeFeedRequest(BaseModel):
+import asyncio
+import random
+import time
+
+_FIRST_NAMES = [
+    "Александр", "Мария", "Дмитрий", "Анна", "Иван", "Елена", "Сергей",
+    "Ольга", "Максим", "Наталья", "Андрей", "Екатерина", "Павел", "Татьяна",
+    "Виктор", "Юлия", "Артём", "Светлана", "Никита", "Ксения", "Алексей",
+    "Валерия", "Роман", "Дарья", "Михаил", "Полина", "Кирилл", "Вероника",
+    "Alex", "Maria", "James", "Sophie", "Michael", "Emma", "David", "Sarah",
+    "Daniel", "Olivia", "William", "Mia", "Thomas", "Emily", "Robert", "Lily",
+]
+
+_LAST_INITIALS = "АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ" + "ABCDEFGHIJKLMNOPRSTUVW"
+
+
+def _gen_realistic_name() -> str:
+    """Generate a realistic-looking masked username."""
+    first = random.choice(_FIRST_NAMES)
+    last_init = random.choice(_LAST_INITIALS)
+    # Mask: first 3 chars + *** + last initial  →  "Але***В"
+    short = first[:3] if len(first) >= 3 else first
+    return f"{short}***{last_init}"
+
+
+class FakeBatchRequest(BaseModel):
+    count: int = 10
+    period_minutes: int = 30
     event_type: str = "deposit"
-    display_name: str = ""
-    amount: float = 10.0
-    profit: float = 0.0
+    min_amount: float = 10.0
+    max_amount: float = 100.0
     maturity_hours: float = 10.0
 
 
+_fake_task: asyncio.Task | None = None
+
+
 @router.post("/fake-feed")
-async def create_fake_feed(req: FakeFeedRequest, admin: dict = Depends(require_admin)):
+async def create_fake_batch(req: FakeBatchRequest, admin: dict = Depends(require_admin)):
     assert _db is not None
-    import time
+    global _fake_task
 
     allowed_types = {"deposit", "payout", "withdrawal"}
     if req.event_type not in allowed_types:
         raise HTTPException(status_code=400, detail=f"Type must be one of: {allowed_types}")
-    if req.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if req.count < 1 or req.count > 200:
+        raise HTTPException(status_code=400, detail="Count must be 1-200")
+    if req.period_minutes < 1:
+        raise HTTPException(status_code=400, detail="Period must be >= 1 minute")
+    if req.min_amount <= 0 or req.max_amount < req.min_amount:
+        raise HTTPException(status_code=400, detail="Invalid amount range")
 
-    matures_at = time.time() + req.maturity_hours * 3600 if req.event_type == "deposit" else 0.0
+    if _fake_task and not _fake_task.done():
+        _fake_task.cancel()
 
-    fid = await _db.add_feed_entry(
-        event_type=req.event_type,
-        display_name=req.display_name or _random_name(),
-        amount=req.amount,
-        profit=req.profit,
-        matures_at=matures_at,
-        is_fake=True,
+    _fake_task = asyncio.create_task(
+        _schedule_fake_entries(
+            db=_db,
+            count=req.count,
+            period_seconds=req.period_minutes * 60,
+            event_type=req.event_type,
+            min_amount=req.min_amount,
+            max_amount=req.max_amount,
+            maturity_hours=req.maturity_hours,
+        )
     )
-    return {"status": "ok", "feed_id": fid}
+    return {
+        "status": "ok",
+        "message": f"Scheduled {req.count} fake entries over {req.period_minutes} min",
+    }
 
 
-def _random_name() -> str:
-    import random
-    names = [
-        "Alex", "Maria", "Dmitry", "Anna", "Ivan", "Elena", "Sergey", "Olga",
-        "Maxim", "Natalia", "Andrey", "Ekaterina", "Pavel", "Tatyana", "Viktor",
-        "John", "Emma", "James", "Sophie", "Michael", "Lisa", "David", "Sarah",
-    ]
-    name = random.choice(names)
-    suffix = random.randint(10, 99)
-    return f"{name}***{suffix}"
+@router.post("/fake-feed/stop")
+async def stop_fake_batch(admin: dict = Depends(require_admin)):
+    global _fake_task
+    if _fake_task and not _fake_task.done():
+        _fake_task.cancel()
+        _fake_task = None
+        return {"status": "ok", "message": "Fake feed stopped"}
+    return {"status": "ok", "message": "No active fake feed"}
+
+
+@router.get("/fake-feed/status")
+async def fake_feed_status(admin: dict = Depends(require_admin)):
+    running = _fake_task is not None and not _fake_task.done()
+    return {"running": running}
+
+
+async def _schedule_fake_entries(
+    db: Database,
+    count: int,
+    period_seconds: int,
+    event_type: str,
+    min_amount: float,
+    max_amount: float,
+    maturity_hours: float,
+) -> None:
+    """Post fake entries one by one at random intervals within the period."""
+    delays = sorted(random.uniform(0, period_seconds) for _ in range(count))
+
+    from app.config import config as cfg
+
+    profit_pct = cfg.profit_percent / 100
+
+    prev = 0.0
+    for delay in delays:
+        wait = delay - prev
+        if wait > 0:
+            await asyncio.sleep(wait)
+        prev = delay
+
+        amount = round(random.uniform(min_amount, max_amount), 2)
+        profit = round(amount * profit_pct, 2) if event_type in ("deposit", "payout") else 0.0
+        matures_at = time.time() + maturity_hours * 3600 if event_type == "deposit" else 0.0
+
+        await db.add_feed_entry(
+            event_type=event_type,
+            display_name=_gen_realistic_name(),
+            amount=amount,
+            profit=profit,
+            matures_at=matures_at,
+            is_fake=True,
+        )

@@ -193,6 +193,13 @@ async def _process_withdrawals() -> None:
                 "Withdrawal #%d sent: user=%d amount=%.4f to=%s",
                 wid, user_id, send_amount, to_addr,
             )
+            user_for_feed = await _db.get_user(user_id)
+            wd_name = _mask_name(user_for_feed.get("first_name", "") if user_for_feed else "")
+            await _db.add_feed_entry(
+                event_type="withdrawal",
+                display_name=wd_name,
+                amount=send_amount,
+            )
             if _bot_notify:
                 try:
                     await _bot_notify(
