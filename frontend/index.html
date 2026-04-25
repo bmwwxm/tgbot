@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GoodMoney</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@2/dist/tonconnect-ui.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Loading -->
+        <div id="loading-screen" class="screen active">
+            <div class="loader-container">
+                <div class="vault-icon">
+                    <svg viewBox="0 0 64 64" width="80" height="80">
+                        <defs>
+                            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6C5CE7"/>
+                                <stop offset="100%" style="stop-color:#00D2FF"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="8" y="16" width="48" height="40" rx="6" fill="none" stroke="url(#grad)" stroke-width="3"/>
+                        <circle cx="32" cy="36" r="8" fill="none" stroke="url(#grad)" stroke-width="2.5"/>
+                        <line x1="32" y1="32" x2="32" y2="28" stroke="url(#grad)" stroke-width="2" stroke-linecap="round"/>
+                        <rect x="24" y="8" width="16" height="10" rx="3" fill="none" stroke="url(#grad)" stroke-width="2.5"/>
+                    </svg>
+                </div>
+                <div class="loader-spinner"></div>
+                <p class="loader-text" data-i18n="loading">Loading...</p>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard-screen" class="screen">
+            <div class="header">
+                <div class="header-top">
+                    <div class="logo">
+                        <span class="logo-icon">💰</span>
+                        <span class="logo-text">GoodMoney</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="lang-btn" onclick="toggleLanguage()">
+                            <span id="lang-label">EN</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="balance-card">
+                    <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                    <h1 class="balance-amount"><span id="balance-value">0.0000</span> TON</h1>
+                    <div class="balance-sub">
+                        <span data-i18n="earned">Earned</span>: <span id="total-earned">0.0000</span> TON
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-banner">
+                <div class="info-icon">🤖</div>
+                <div class="info-text">
+                    <p class="info-title" data-i18n="how_it_works">How it works</p>
+                    <p class="info-desc" data-i18n="legend">Our AI algorithms perform arbitrage trading across TON DEX platforms (DeDust, STON.fi), generating consistent returns from price differences.</p>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card">
+                    <span class="stat-icon">📈</span>
+                    <span class="stat-value" id="stat-profit">+10%</span>
+                    <span class="stat-label" data-i18n="profit">Profit</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">⏱</span>
+                    <span class="stat-value" id="stat-hours">10h</span>
+                    <span class="stat-label" data-i18n="maturity">Maturity</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">💰</span>
+                    <span class="stat-value" id="stat-min">10</span>
+                    <span class="stat-label" data-i18n="min_dep">Min Dep</span>
+                </div>
+            </div>
+
+            <div class="active-deposits" id="active-deposits-section" style="display:none">
+                <h3 data-i18n="active_deposits">Active Deposits</h3>
+                <div id="active-deposits-list"></div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary btn-large" onclick="navigate('deposit')">
+                    <span>💎</span> <span data-i18n="deposit">Deposit</span>
+                </button>
+                <button class="btn btn-secondary btn-large" onclick="navigate('withdraw')">
+                    <span>💸</span> <span data-i18n="withdraw">Withdraw</span>
+                </button>
+            </div>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn active" onclick="navigate('dashboard')">
+                    <span class="nav-icon">🏠</span>
+                    <span data-i18n="home">Home</span>
+                </button>
+                <button class="nav-btn" onclick="navigate('history')">
+                    <span class="nav-icon">📋</span>
+                    <span data-i18n="history">History</span>
+                </button>
+                <button class="nav-btn" onclick="navigate('referral')">
+                    <span class="nav-icon">🤝</span>
+                    <span data-i18n="referrals">Referrals</span>
+                </button>
+                <button class="nav-btn" id="admin-nav-btn" style="display:none" onclick="navigate('admin')">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Admin</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Deposit Screen -->
+        <div id="deposit-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="make_deposit">Make a Deposit</h2>
+            </div>
+
+            <div class="deposit-info-card">
+                <p class="card-subtitle" data-i18n="deposit_desc">Deposit TON and earn profit after maturity period</p>
+                <div class="deposit-stats">
+                    <div><span data-i18n="min_deposit">Min deposit</span>: <b id="dep-min">10 TON</b></div>
+                    <div><span data-i18n="profit_label">Profit</span>: <b id="dep-profit">+10%</b></div>
+                    <div><span data-i18n="maturity_label">Maturity</span>: <b id="dep-maturity">10h</b></div>
+                </div>
+            </div>
+
+            <div class="deposit-methods">
+                <h3 data-i18n="deposit_method">Deposit Method</h3>
+
+                <div class="method-tabs">
+                    <button class="method-tab active" onclick="switchDepositMethod('tonconnect')" data-i18n="ton_connect">TON Connect</button>
+                    <button class="method-tab" onclick="switchDepositMethod('manual')" data-i18n="manual_transfer">Manual Transfer</button>
+                </div>
+
+                <div id="tonconnect-method" class="method-content active">
+                    <div id="ton-connect-button-container"></div>
+                    <div class="input-group">
+                        <label data-i18n="amount">Amount (TON)</label>
+                        <input type="number" id="tc-amount" placeholder="10" min="10" step="0.01">
+                    </div>
+                    <button class="btn btn-primary btn-large" onclick="sendViaTonConnect()" id="tc-send-btn">
+                        <span>💎</span> <span data-i18n="send_deposit">Send Deposit</span>
+                    </button>
+                </div>
+
+                <div id="manual-method" class="method-content">
+                    <div class="manual-deposit-info">
+                        <p data-i18n="manual_desc">Send TON to the address below with the exact comment:</p>
+                        <div class="copy-field">
+                            <label data-i18n="wallet_address">Wallet Address</label>
+                            <div class="copy-row">
+                                <code id="deposit-address">Loading...</code>
+                                <button class="copy-btn" onclick="copyToClipboard('deposit-address')" data-i18n="copy">Copy</button>
+                            </div>
+                        </div>
+                        <div class="copy-field">
+                            <label data-i18n="comment">Comment (required!)</label>
+                            <div class="copy-row">
+                                <code id="deposit-comment">Loading...</code>
+                                <button class="copy-btn" onclick="copyToClipboard('deposit-comment')" data-i18n="copy">Copy</button>
+                            </div>
+                        </div>
+                        <div class="warning-box">
+                            <span>⚠️</span>
+                            <span data-i18n="comment_warning">Always include the comment! Deposits without correct comment cannot be matched to your account.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Withdraw Screen -->
+        <div id="withdraw-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="withdraw_title">Withdraw</h2>
+            </div>
+
+            <div class="withdraw-card">
+                <p class="balance-label" data-i18n="available_balance">Available Balance</p>
+                <h2 class="balance-amount"><span id="withdraw-balance">0.0000</span> TON</h2>
+            </div>
+
+            <div class="form-section">
+                <div class="input-group">
+                    <label data-i18n="amount">Amount (TON)</label>
+                    <input type="number" id="withdraw-amount" placeholder="1.0" min="1" step="0.01">
+                    <button class="max-btn" onclick="setMaxWithdraw()" data-i18n="max">MAX</button>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="ton_address">TON Address</label>
+                    <input type="text" id="withdraw-address" placeholder="UQ...">
+                </div>
+                <div class="fee-info">
+                    <span data-i18n="fee">Fee</span>: <span id="withdraw-fee">0.01</span> TON
+                </div>
+                <div class="fee-info">
+                    <span data-i18n="you_receive">You receive</span>: <span id="withdraw-net">0.00</span> TON
+                </div>
+                <button class="btn btn-primary btn-large" onclick="submitWithdraw()">
+                    <span>💸</span> <span data-i18n="confirm_withdraw">Confirm Withdrawal</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- History Screen -->
+        <div id="history-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="history_title">History</h2>
+            </div>
+            <div class="tabs">
+                <button class="tab active" onclick="switchHistoryTab('deposits')" data-i18n="deposits">Deposits</button>
+                <button class="tab" onclick="switchHistoryTab('withdrawals')" data-i18n="withdrawals">Withdrawals</button>
+            </div>
+            <div id="history-deposits" class="history-list"></div>
+            <div id="history-withdrawals" class="history-list" style="display:none"></div>
+        </div>
+
+        <!-- Referral Screen -->
+        <div id="referral-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="referral_title">Referral Program</h2>
+            </div>
+
+            <div class="referral-card">
+                <div class="ref-icon">🤝</div>
+                <h3 data-i18n="invite_friends">Invite Friends & Earn</h3>
+                <p class="ref-desc" data-i18n="referral_desc">Get a percentage of your referrals' deposit profits!</p>
+                <div class="ref-stats">
+                    <div class="ref-stat">
+                        <span class="ref-stat-value" id="ref-percent">10%</span>
+                        <span class="ref-stat-label" data-i18n="commission">Commission</span>
+                    </div>
+                    <div class="ref-stat">
+                        <span class="ref-stat-value" id="ref-count">0</span>
+                        <span class="ref-stat-label" data-i18n="referrals">Referrals</span>
+                    </div>
+                    <div class="ref-stat">
+                        <span class="ref-stat-value" id="ref-earnings">0.00</span>
+                        <span class="ref-stat-label" data-i18n="earned">Earned</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="copy-field">
+                <label data-i18n="your_link">Your Referral Link</label>
+                <div class="copy-row">
+                    <code id="referral-link">Loading...</code>
+                    <button class="copy-btn" onclick="copyToClipboard('referral-link')" data-i18n="copy">Copy</button>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-large" onclick="shareReferral()">
+                <span>📤</span> <span data-i18n="share">Share Link</span>
+            </button>
+
+            <div class="referral-list" id="referral-list-section" style="display:none">
+                <h3 data-i18n="your_referrals">Your Referrals</h3>
+                <div id="referral-list"></div>
+            </div>
+        </div>
+
+        <!-- Admin Screen -->
+        <div id="admin-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2>Admin Panel</h2>
+            </div>
+
+            <div class="admin-tabs">
+                <button class="admin-tab active" onclick="switchAdminTab('stats')">📊 Stats</button>
+                <button class="admin-tab" onclick="switchAdminTab('users')">👥 Users</button>
+                <button class="admin-tab" onclick="switchAdminTab('settings')">⚙️ Settings</button>
+                <button class="admin-tab" onclick="switchAdminTab('broadcast')">📢 Broadcast</button>
+            </div>
+
+            <!-- Stats -->
+            <div id="admin-stats" class="admin-panel active">
+                <div class="admin-stats-grid">
+                    <div class="admin-stat"><span class="admin-stat-label">Users</span><span class="admin-stat-value" id="a-users">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Deposits</span><span class="admin-stat-value" id="a-deposits">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Deposit Volume</span><span class="admin-stat-value" id="a-dep-vol">0 TON</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Profit Paid</span><span class="admin-stat-value" id="a-profit">0 TON</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Pending</span><span class="admin-stat-value" id="a-pending">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Withdrawals</span><span class="admin-stat-value" id="a-withdrawals">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Withdrawn</span><span class="admin-stat-value" id="a-withdrawn">0 TON</span></div>
+                    <div class="admin-stat highlight"><span class="admin-stat-label">Wallet Balance</span><span class="admin-stat-value" id="a-wallet">0 TON</span></div>
+                </div>
+                <div class="admin-wallet-addr">
+                    <small>Wallet: <code id="a-wallet-addr">-</code></small>
+                </div>
+            </div>
+
+            <!-- Users -->
+            <div id="admin-users" class="admin-panel">
+                <div class="admin-user-list" id="admin-user-list"></div>
+                <div class="admin-pagination">
+                    <button class="btn btn-small" onclick="adminUsersPage(-1)">← Prev</button>
+                    <span id="admin-users-page">1</span>
+                    <button class="btn btn-small" onclick="adminUsersPage(1)">Next →</button>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div id="admin-settings" class="admin-panel">
+                <div class="settings-form" id="admin-settings-form"></div>
+                <button class="btn btn-primary" onclick="saveAdminSettings()">Save Settings</button>
+            </div>
+
+            <!-- Broadcast -->
+            <div id="admin-broadcast" class="admin-panel">
+                <div class="input-group">
+                    <label>Message (HTML supported)</label>
+                    <textarea id="broadcast-message" rows="5" placeholder="Enter message..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="sendBroadcast()">Send to All Users</button>
+                <div id="broadcast-result"></div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="/js/i18n.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

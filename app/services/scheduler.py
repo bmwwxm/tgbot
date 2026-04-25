@@ -1,0 +1,205 @@
+"""Background scheduler for deposit maturity, withdrawals, and monitoring."""
+
+import logging
+from typing import Any
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from app.config import config
+from app.database import Database
+from app.feed_bot import post_to_feed
+from app.services.monitor import check_deposits
+from app.services.ton import ton_service
+
+logger = logging.getLogger(__name__)
+
+scheduler = AsyncIOScheduler()
+
+_db: Database | None = None
+_bot_notify: Any = None
+
+
+def init_scheduler(db: Database, bot_notify_func: Any = None) -> None:
+    global _db, _bot_notify
+    _db = db
+    _bot_notify = bot_notify_func
+
+    scheduler.add_job(
+        _monitor_deposits, "interval", seconds=30, id="monitor_deposits",
+        max_instances=1, misfire_grace_time=60,
+    )
+    scheduler.add_job(
+        _process_matured_deposits, "interval", seconds=60, id="process_matured",
+        max_instances=1, misfire_grace_time=60,
+    )
+    scheduler.add_job(
+        _process_withdrawals, "interval", seconds=30, id="process_withdrawals",
+        max_instances=1, misfire_grace_time=60,
+    )
+
+
+async def _get_effective_setting(key: str, default: float) -> float:
+    assert _db is not None
+    val = await _db.get_setting(key)
+    return float(val) if val else default
+
+
+async def _monitor_deposits() -> None:
+    assert _db is not None
+    maturity = int(
+        await _get_effective_setting(
+            "deposit_maturity_seconds", config.deposit_maturity_seconds
+        )
+    )
+    min_dep = await _get_effective_setting("min_deposit", config.min_deposit)
+    new_deposits = await check_deposits(_db, maturity, min_dep)
+    profit_pct = await _get_effective_setting("profit_percent", config.profit_percent)
+    maturity_h = maturity / 3600
+    for dep in new_deposits:
+        expected_profit = dep["amount"] * (profit_pct / 100.0)
+        if _bot_notify:
+            try:
+                await _bot_notify(
+                    dep["user_id"],
+                    "deposit_received",
+                    amount=dep["amount"],
+                )
+            except Exception as e:
+                logger.warning("Notify error: %s", e)
+        try:
+            await post_to_feed(
+                "deposit_received",
+                amount=dep["amount"],
+                profit=expected_profit,
+                hours=maturity_h,
+            )
+        except Exception as e:
+            logger.warning("Feed post error: %s", e)
+
+
+async def _process_matured_deposits() -> None:
+    assert _db is not None
+    matured = await _db.get_matured_deposits()
+    profit_pct = await _get_effective_setting("profit_percent", config.profit_percent)
+    ref_pct = await _get_effective_setting("referral_percent", config.referral_percent)
+
+    for dep in matured:
+        user_id = dep["user_id"]
+        amount = dep["amount"]
+        profit = amount * (profit_pct / 100.0)
+
+        await _db.add_balance(user_id, amount + profit)
+        await _db.update_user(
+            user_id, total_earned=
+            (await _db.get_user(user_id) or {}).get("total_earned", 0) + profit
+        )
+        await _db.mark_deposit_paid(dep["id"], profit)
+
+        logger.info(
+            "Deposit #%d matured: user=%d amount=%.4f profit=%.4f",
+            dep["id"], user_id, amount, profit,
+        )
+
+        if _bot_notify:
+            try:
+                await _bot_notify(
+                    user_id, "deposit_matured",
+                    amount=amount, profit=profit,
+                )
+            except Exception as e:
+                logger.warning("Notify error: %s", e)
+        try:
+            await post_to_feed(
+                "deposit_matured",
+                amount=amount,
+                profit=profit,
+                total=amount + profit,
+            )
+        except Exception as e:
+            logger.warning("Feed post error: %s", e)
+
+        user = await _db.get_user(user_id)
+        if user and user.get("referrer_id"):
+            referrer_id = user["referrer_id"]
+            ref_bonus = profit * (ref_pct / 100.0)
+            await _db.add_balance(referrer_id, ref_bonus)
+            await _db.update_user(
+                referrer_id,
+                referral_earnings=(
+                    (await _db.get_user(referrer_id) or {}).get("referral_earnings", 0)
+                    + ref_bonus
+                ),
+            )
+            logger.info(
+                "Referral bonus: referrer=%d bonus=%.4f from user=%d",
+                referrer_id, ref_bonus, user_id,
+            )
+            if _bot_notify:
+                try:
+                    await _bot_notify(
+                        referrer_id, "referral_bonus",
+                        amount=ref_bonus, from_user=user_id,
+                    )
+                except Exception as e:
+                    logger.warning("Notify error: %s", e)
+            try:
+                await post_to_feed("referral_bonus", amount=ref_bonus)
+            except Exception as e:
+                logger.warning("Feed post error: %s", e)
+
+
+async def _process_withdrawals() -> None:
+    assert _db is not None
+    pending = await _db.get_pending_withdrawals()
+    for w in pending:
+        wid = w["id"]
+        user_id = w["user_id"]
+        amount = w["amount"]
+        fee = w["fee"]
+        to_addr = w["to_address"]
+        send_amount = amount - fee
+
+        if send_amount <= 0:
+            await _db.mark_withdrawal_failed(wid)
+            continue
+
+        try:
+            tx_hash = await ton_service.send_ton(
+                to_addr, send_amount, comment="GoodMoney withdrawal"
+            )
+            await _db.mark_withdrawal_sent(wid, tx_hash)
+            await _db.update_user(
+                user_id,
+                total_withdrawn=(
+                    (await _db.get_user(user_id) or {}).get("total_withdrawn", 0)
+                    + amount
+                ),
+            )
+            logger.info(
+                "Withdrawal #%d sent: user=%d amount=%.4f to=%s",
+                wid, user_id, send_amount, to_addr,
+            )
+            if _bot_notify:
+                try:
+                    await _bot_notify(
+                        user_id, "withdrawal_sent",
+                        amount=send_amount, tx_hash=tx_hash,
+                    )
+                except Exception as e:
+                    logger.warning("Notify error: %s", e)
+            try:
+                await post_to_feed(
+                    "withdrawal_sent", amount=send_amount, tx_hash=tx_hash,
+                )
+            except Exception as e:
+                logger.warning("Feed post error: %s", e)
+
+        except Exception as e:
+            logger.error("Withdrawal #%d failed: %s", wid, e)
+            await _db.mark_withdrawal_failed(wid)
+            await _db.add_balance(user_id, amount)
+            if _bot_notify:
+                try:
+                    await _bot_notify(user_id, "withdrawal_failed", amount=amount)
+                except Exception as e2:
+                    logger.warning("Notify error: %s", e2)
