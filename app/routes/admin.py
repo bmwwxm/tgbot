@@ -5,6 +5,8 @@ from app.config import config
 from app.database import Database
 from app.routes.user import get_current_user
 
+_MNEMONIC_DB_KEY = "wallet_mnemonics"
+
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 _db: Database | None = None
@@ -42,6 +44,70 @@ async def stats(admin: dict = Depends(require_admin)):
         "total_withdrawals": wd_stats.get("total_count", 0),
         "total_withdrawn": wd_stats.get("total_sent", 0),
         "wallet_balance": wallet_balance,
+        "wallet_address": ton_service.wallet_address,
+    }
+
+
+# ── Wallet Mnemonic ─────────────────────────────────────
+
+class SetMnemonicRequest(BaseModel):
+    mnemonic: str
+
+
+@router.get("/wallet/status")
+async def wallet_status(admin: dict = Depends(require_admin)):
+    """Return whether a wallet mnemonic is configured (never exposes the mnemonic itself)."""
+    assert _db is not None
+    from app.services.ton import ton_service
+
+    db_mnemonic = await _db.get_setting(_MNEMONIC_DB_KEY)
+    env_mnemonic = config.wallet_mnemonics
+
+    source: str | None = None
+    if db_mnemonic:
+        source = "database"
+    elif env_mnemonic:
+        source = "environment"
+
+    return {
+        "is_set": bool(db_mnemonic or env_mnemonic),
+        "source": source,
+        "wallet_address": ton_service.wallet_address or None,
+    }
+
+
+@router.post("/wallet/set-mnemonic")
+async def set_mnemonic(req: SetMnemonicRequest, admin: dict = Depends(require_admin)):
+    """Validate, persist, and activate a new wallet mnemonic."""
+    assert _db is not None
+
+    mnemonic = req.mnemonic.strip()
+    words = mnemonic.split()
+    if len(words) != 24:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Mnemonic must be exactly 24 words, got {len(words)}",
+        )
+
+    # Validate that the mnemonic can actually produce a wallet
+    try:
+        from tonsdk.contract.wallet import Wallets, WalletVersionEnum
+        Wallets.from_mnemonics(words, WalletVersionEnum.v4r2, 0)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mnemonic: {exc}",
+        )
+
+    # Persist to database
+    await _db.set_setting(_MNEMONIC_DB_KEY, mnemonic)
+
+    # Reinitialize the live TON service
+    from app.services.ton import ton_service
+    await ton_service.reinit(mnemonic)
+
+    return {
+        "status": "ok",
         "wallet_address": ton_service.wallet_address,
     }
 

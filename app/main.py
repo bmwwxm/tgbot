@@ -107,6 +107,14 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 async def startup():
     logger.info("Starting GoodMoney...")
     await db.connect()
+
+    # Check DB for a stored mnemonic; if found, it overrides the env var
+    from app.routes.admin import _MNEMONIC_DB_KEY
+    db_mnemonic = await db.get_setting(_MNEMONIC_DB_KEY)
+    if db_mnemonic:
+        logger.info("Loading wallet mnemonic from database")
+        config.wallet_mnemonics = db_mnemonic
+
     await ton_service.init()
     init_bot(db)
     init_scheduler(db, notify_user)

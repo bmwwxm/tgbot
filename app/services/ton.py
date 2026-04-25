@@ -25,15 +25,24 @@ class TonService:
     async def init(self) -> None:
         self._session = aiohttp.ClientSession()
         if config.wallet_mnemonics:
-            mnemonics = config.wallet_mnemonics.split()
-            _mnemonics, _pub, _priv, wallet = Wallets.from_mnemonics(
-                mnemonics, WalletVersionEnum.v4r2, 0
-            )
-            self._wallet = wallet
-            self._wallet_address = wallet.address.to_string(
-                is_user_friendly=True, is_bounceable=False, is_url_safe=True
-            )
-            logger.info("Wallet initialized: %s", self._wallet_address)
+            self._load_mnemonics(config.wallet_mnemonics)
+
+    def _load_mnemonics(self, mnemonics_str: str) -> None:
+        """Initialize wallet from a mnemonic string (space-separated words)."""
+        mnemonics = mnemonics_str.split()
+        _mnemonics, _pub, _priv, wallet = Wallets.from_mnemonics(
+            mnemonics, WalletVersionEnum.v4r2, 0
+        )
+        self._wallet = wallet
+        self._wallet_address = wallet.address.to_string(
+            is_user_friendly=True, is_bounceable=False, is_url_safe=True
+        )
+        logger.info("Wallet initialized: %s", self._wallet_address)
+
+    async def reinit(self, mnemonics_str: str) -> None:
+        """Reinitialize the wallet with a new mnemonic phrase."""
+        self._load_mnemonics(mnemonics_str)
+        logger.info("Wallet reinitialized: %s", self._wallet_address)
 
     async def close(self) -> None:
         if self._session:
