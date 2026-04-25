@@ -4,6 +4,8 @@ let user = null;
 let settings = {};
 let tonConnectUI = null;
 let adminPage = 0;
+let minesGame = null;
+let feedTimer = null;
 
 // ── Init ──────────────────────────────────────────────
 
@@ -245,6 +247,7 @@ function navigate(screen) {
     if (screen === "history") loadHistory();
     if (screen === "referral") loadReferral();
     if (screen === "admin") loadAdmin();
+    if (screen === "mines") loadMines();
 }
 
 function showScreen(name) {
@@ -272,6 +275,8 @@ async function loadDashboard() {
     if (user.is_admin) {
         document.getElementById("admin-nav-btn").style.display = "";
     }
+
+    loadFeed();
 
     try {
         const active = await apiCall("/api/deposit/active");
@@ -633,6 +638,7 @@ function switchAdminTab(tab) {
     if (tab === "stats") loadAdminStats();
     if (tab === "users") loadAdminUsers();
     if (tab === "settings") loadAdminSettings();
+    if (tab === "fakefeed") {}
 }
 
 // ── Utils ─────────────────────────────────────────────
@@ -681,4 +687,291 @@ async function refreshData() {
             loadDashboard();
         }
     } catch (e) {}
+}
+
+// ── Live Feed ─────────────────────────────────────────
+
+async function loadFeed() {
+    try {
+        const data = await fetch("/api/feed/recent?limit=15").then(r => r.json());
+        const list = document.getElementById("live-feed-list");
+        if (!data.feed || data.feed.length === 0) {
+            list.innerHTML = `<div class="empty-state"><p style="font-size:13px;color:var(--text-secondary)">${t("no_activity")}</p></div>`;
+            return;
+        }
+        list.innerHTML = data.feed.map(e => {
+            const icon = e.event_type === "deposit" ? "💎" : e.event_type === "payout" ? "💰" : "💸";
+            const now = Date.now() / 1000;
+            let rightHtml = "";
+            if (e.event_type === "deposit" && e.matures_at > now) {
+                const rem = e.matures_at - now;
+                const h = Math.floor(rem / 3600);
+                const m = Math.floor((rem % 3600) / 60);
+                rightHtml = `<div class="feed-timer">⏱ ${h}h ${m}m</div>`;
+            } else if (e.event_type === "payout" && e.profit > 0) {
+                rightHtml = `<div class="feed-profit">+${e.profit.toFixed(2)} TON</div>`;
+            }
+            const ago = _timeAgo(now - e.created_at);
+            rightHtml += `<div class="feed-time-ago">${ago}</div>`;
+            const label = e.event_type === "deposit" ? t("deposit") : e.event_type === "payout" ? t("paid") : t("withdraw");
+            return `
+                <div class="feed-item">
+                    <div class="feed-item-left">
+                        <span class="feed-event-icon">${icon}</span>
+                        <div>
+                            <div class="feed-amount">${e.amount.toFixed(2)} TON <span style="font-weight:400;font-size:11px;color:var(--text-secondary)">${label}</span></div>
+                            <div class="feed-name">${e.display_name}</div>
+                        </div>
+                    </div>
+                    <div class="feed-item-right">${rightHtml}</div>
+                </div>`;
+        }).join("");
+    } catch (e) {}
+
+    if (feedTimer) clearTimeout(feedTimer);
+    feedTimer = setTimeout(() => {
+        const cs = document.querySelector(".screen.active");
+        if (cs && cs.id === "dashboard-screen") loadFeed();
+    }, 15000);
+}
+
+function _timeAgo(seconds) {
+    if (seconds < 60) return t("just_now");
+    if (seconds < 3600) return Math.floor(seconds / 60) + t("min_ago");
+    if (seconds < 86400) return Math.floor(seconds / 3600) + t("hour_ago");
+    return Math.floor(seconds / 86400) + t("day_ago");
+}
+
+// ── Mines Game ────────────────────────────────────────
+
+async function loadMines() {
+    if (!user) return;
+    try { user = await apiCall("/api/user/me"); } catch (e) {}
+    document.getElementById("mines-balance").textContent = (user.balance || 0).toFixed(4);
+
+    try {
+        const active = await apiCall("/api/mines/active");
+        if (active.active) {
+            minesGame = active;
+            showMinesGameArea(active);
+        } else {
+            minesGame = null;
+            showMinesSetup();
+        }
+    } catch (e) {
+        showMinesSetup();
+    }
+}
+
+function showMinesSetup() {
+    document.getElementById("mines-setup").style.display = "";
+    document.getElementById("mines-game-area").style.display = "none";
+    document.getElementById("mines-server-seed-reveal").style.display = "none";
+    document.getElementById("mines-server-hash").textContent = "-";
+    document.getElementById("mines-client-seed").textContent = "-";
+}
+
+function showMinesGameArea(game) {
+    document.getElementById("mines-setup").style.display = "none";
+    document.getElementById("mines-game-area").style.display = "";
+    document.getElementById("mines-current-bet").textContent = game.bet;
+    document.getElementById("mines-multiplier").textContent = game.multiplier.toFixed(2);
+    document.getElementById("mines-profit").textContent = (game.bet * game.multiplier - game.bet).toFixed(4);
+    document.getElementById("mines-cashout-amount").textContent = (game.bet * game.multiplier).toFixed(2);
+    document.getElementById("mines-next-multiplier").textContent = game.next_multiplier ? game.next_multiplier.toFixed(2) : "-";
+    document.getElementById("mines-server-hash").textContent = game.server_seed_hash || "-";
+    document.getElementById("mines-client-seed").textContent = game.client_seed || "-";
+
+    if (game.multiplier <= 1.0) {
+        document.getElementById("mines-cashout-btn").style.display = "none";
+    } else {
+        document.getElementById("mines-cashout-btn").style.display = "";
+    }
+
+    renderMinesGrid(game);
+}
+
+function renderMinesGrid(game) {
+    const grid = document.getElementById("mines-grid");
+    const revealed = game.revealed || [];
+    const mines = game.mines || [];
+    const gameOver = game.game_over || false;
+
+    grid.innerHTML = "";
+    for (let i = 0; i < 25; i++) {
+        const cell = document.createElement("div");
+        cell.className = "mine-cell";
+        cell.dataset.index = i;
+
+        if (revealed.includes(i)) {
+            if (mines.includes(i)) {
+                cell.classList.add("mine");
+                cell.textContent = "💣";
+            } else {
+                cell.classList.add("revealed");
+                cell.textContent = "💎";
+            }
+        } else if (gameOver && mines.includes(i)) {
+            cell.classList.add("mine");
+            cell.textContent = "💣";
+        } else if (gameOver) {
+            cell.classList.add("disabled");
+        } else {
+            cell.onclick = () => revealMineCell(i);
+        }
+
+        grid.appendChild(cell);
+    }
+}
+
+function setMinesCount(count) {
+    document.getElementById("mines-count").value = count;
+    document.querySelectorAll(".mines-preset").forEach(b => b.classList.remove("active"));
+    event.target.classList.add("active");
+}
+
+async function startMinesGame() {
+    const bet = parseFloat(document.getElementById("mines-bet").value);
+    const mines = parseInt(document.getElementById("mines-count").value);
+
+    if (!bet || bet < 0.1) {
+        showToast(t("invalid_amount"), "error");
+        return;
+    }
+    if (!user || bet > user.balance) {
+        showToast(t("insufficient_balance"), "error");
+        return;
+    }
+    if (mines < 1 || mines > 24) {
+        showToast(t("invalid_mines"), "error");
+        return;
+    }
+
+    try {
+        const game = await apiCall("/api/mines/start", "POST", { bet, mines_count: mines });
+        minesGame = {
+            ...game,
+            active: true,
+            next_multiplier: null,
+        };
+        // Compute next multiplier client-side
+        minesGame.next_multiplier = calcNextMult(mines, 1);
+        showMinesGameArea(minesGame);
+        document.getElementById("mines-balance").textContent =
+            ((user.balance || 0) - bet).toFixed(4);
+    } catch (e) {
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+function calcNextMult(minesCount, revealedCount) {
+    let prob = 1.0;
+    for (let i = 0; i < revealedCount; i++) {
+        prob *= (25 - minesCount - i) / (25 - i);
+    }
+    return prob > 0 ? Math.round(0.97 / prob * 100) / 100 : 0;
+}
+
+async function revealMineCell(index) {
+    if (!minesGame) return;
+    const cell = document.querySelector(`.mine-cell[data-index="${index}"]`);
+    if (!cell || cell.classList.contains("revealed") || cell.classList.contains("mine")) return;
+
+    cell.style.opacity = "0.5";
+    try {
+        const res = await apiCall("/api/mines/reveal", "POST", { cell: index });
+        cell.style.opacity = "";
+
+        if (res.result === "mine") {
+            minesGame = { ...minesGame, ...res, game_over: true };
+            renderMinesGrid(minesGame);
+            document.getElementById("mines-multiplier").textContent = "0.00";
+            document.getElementById("mines-profit").textContent = (-minesGame.bet).toFixed(4);
+            document.getElementById("mines-cashout-btn").style.display = "none";
+            document.getElementById("mines-server-seed-reveal").style.display = "";
+            document.getElementById("mines-server-seed").textContent = res.server_seed;
+            showToast(t("mine_hit"), "error");
+            setTimeout(() => {
+                showMinesSetup();
+                loadMines();
+            }, 3000);
+        } else if (res.result === "win_all") {
+            minesGame = { ...minesGame, ...res, game_over: true };
+            renderMinesGrid(minesGame);
+            document.getElementById("mines-multiplier").textContent = res.multiplier.toFixed(2);
+            document.getElementById("mines-profit").textContent = res.profit.toFixed(4);
+            document.getElementById("mines-cashout-btn").style.display = "none";
+            document.getElementById("mines-server-seed-reveal").style.display = "";
+            document.getElementById("mines-server-seed").textContent = res.server_seed;
+            showToast(t("all_safe") + " +" + res.profit.toFixed(4) + " TON!", "success");
+            setTimeout(() => {
+                showMinesSetup();
+                loadMines();
+            }, 3000);
+        } else {
+            minesGame.revealed = res.revealed;
+            minesGame.multiplier = res.multiplier;
+            minesGame.next_multiplier = res.next_multiplier;
+            cell.classList.add("revealed");
+            cell.textContent = "💎";
+            cell.onclick = null;
+            document.getElementById("mines-multiplier").textContent = res.multiplier.toFixed(2);
+            document.getElementById("mines-profit").textContent = res.profit.toFixed(4);
+            document.getElementById("mines-cashout-amount").textContent = (minesGame.bet * res.multiplier).toFixed(2);
+            document.getElementById("mines-next-multiplier").textContent = res.next_multiplier ? res.next_multiplier.toFixed(2) : "-";
+            if (res.multiplier > 1.0) {
+                document.getElementById("mines-cashout-btn").style.display = "";
+            }
+        }
+    } catch (e) {
+        cell.style.opacity = "";
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+async function minesCashout() {
+    if (!minesGame) return;
+    try {
+        const res = await apiCall("/api/mines/cashout", "POST");
+        minesGame.mines = res.mines;
+        minesGame.game_over = true;
+        renderMinesGrid(minesGame);
+        document.getElementById("mines-cashout-btn").style.display = "none";
+        document.getElementById("mines-server-seed-reveal").style.display = "";
+        document.getElementById("mines-server-seed").textContent = res.server_seed;
+        showToast("+" + res.profit.toFixed(4) + " TON! " + t("cashout_success"), "success");
+        setTimeout(() => {
+            showMinesSetup();
+            loadMines();
+        }, 2000);
+    } catch (e) {
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+// ── Admin Fake Feed ───────────────────────────────────
+
+async function createFakeFeed() {
+    const type = document.getElementById("fake-type").value;
+    const name = document.getElementById("fake-name").value;
+    const amount = parseFloat(document.getElementById("fake-amount").value);
+    const profit = parseFloat(document.getElementById("fake-profit").value) || 0;
+    const maturity = parseFloat(document.getElementById("fake-maturity").value) || 10;
+
+    try {
+        await apiCall("/api/admin/fake-feed", "POST", {
+            event_type: type,
+            display_name: name,
+            amount: amount,
+            profit: profit,
+            maturity_hours: maturity,
+        });
+        document.getElementById("fake-feed-result").innerHTML =
+            `<p style="color:var(--success);margin-top:8px">${t("success")}!</p>`;
+        setTimeout(() => {
+            document.getElementById("fake-feed-result").innerHTML = "";
+        }, 3000);
+    } catch (e) {
+        showToast(e.message || t("error"), "error");
+    }
 }

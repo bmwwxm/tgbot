@@ -95,6 +95,20 @@
                 </button>
             </div>
 
+            <div class="action-buttons" style="margin-top:0">
+                <button class="btn btn-accent btn-large" onclick="navigate('mines')">
+                    <span>💣</span> <span data-i18n="mines_game">Mines</span>
+                </button>
+            </div>
+
+            <div class="live-feed-section">
+                <h3 class="feed-title">
+                    <span class="live-dot"></span>
+                    <span data-i18n="live_feed">Live Feed</span>
+                </h3>
+                <div id="live-feed-list" class="live-feed-list"></div>
+            </div>
+
             <nav class="bottom-nav">
                 <button class="nav-btn active" onclick="navigate('dashboard')">
                     <span class="nav-icon">🏠</span>
@@ -269,6 +283,71 @@
             </div>
         </div>
 
+        <!-- Mines Game Screen -->
+        <div id="mines-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="mines_game">Mines</h2>
+            </div>
+
+            <div id="mines-setup" class="mines-setup">
+                <div class="mines-balance-card">
+                    <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                    <h2 class="balance-amount"><span id="mines-balance">0.0000</span> TON</h2>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="bet_amount">Bet (TON)</label>
+                    <input type="number" id="mines-bet" placeholder="0.1" min="0.1" step="0.1" value="0.1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="mines_count">Mines (1-24)</label>
+                    <div class="mines-presets">
+                        <button class="mines-preset active" onclick="setMinesCount(3)">3</button>
+                        <button class="mines-preset" onclick="setMinesCount(5)">5</button>
+                        <button class="mines-preset" onclick="setMinesCount(10)">10</button>
+                        <button class="mines-preset" onclick="setMinesCount(15)">15</button>
+                        <button class="mines-preset" onclick="setMinesCount(20)">20</button>
+                    </div>
+                    <input type="number" id="mines-count" value="3" min="1" max="24" style="margin-top:8px">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="startMinesGame()">
+                    <span>💣</span> <span data-i18n="start_game">Start Game</span>
+                </button>
+            </div>
+
+            <div id="mines-game-area" class="mines-game-area" style="display:none">
+                <div class="mines-info-bar">
+                    <div class="mines-info-item">
+                        <span data-i18n="bet_amount">Bet</span>: <b id="mines-current-bet">0</b> TON
+                    </div>
+                    <div class="mines-info-item">
+                        <span data-i18n="multiplier">Multiplier</span>: <b id="mines-multiplier">1.00</b>x
+                    </div>
+                    <div class="mines-info-item">
+                        <span data-i18n="profit_label">Profit</span>: <b id="mines-profit">0.0000</b> TON
+                    </div>
+                </div>
+                <div class="mines-next-mult">
+                    <span data-i18n="next_cell">Next</span>: <span id="mines-next-multiplier">-</span>x
+                </div>
+                <div id="mines-grid" class="mines-grid"></div>
+                <button class="btn btn-success btn-large" id="mines-cashout-btn" onclick="minesCashout()">
+                    <span>💰</span> <span data-i18n="cashout">Cashout</span> <span id="mines-cashout-amount">0.00</span> TON
+                </button>
+            </div>
+
+            <div class="mines-fairness" style="margin-top:16px">
+                <details>
+                    <summary data-i18n="provably_fair">Provably Fair</summary>
+                    <div class="fairness-info">
+                        <p>Server Seed Hash: <code id="mines-server-hash">-</code></p>
+                        <p>Client Seed: <code id="mines-client-seed">-</code></p>
+                        <p id="mines-server-seed-reveal" style="display:none">Server Seed: <code id="mines-server-seed">-</code></p>
+                    </div>
+                </details>
+            </div>
+        </div>
+
         <!-- Admin Screen -->
         <div id="admin-screen" class="screen">
             <div class="screen-header">
@@ -281,6 +360,7 @@
                 <button class="admin-tab" onclick="switchAdminTab('users')">👥 Users</button>
                 <button class="admin-tab" onclick="switchAdminTab('settings')">⚙️ Settings</button>
                 <button class="admin-tab" onclick="switchAdminTab('broadcast')">📢 Broadcast</button>
+                <button class="admin-tab" onclick="switchAdminTab('fakefeed')">📡 Feed</button>
             </div>
 
             <!-- Stats -->
@@ -324,6 +404,37 @@
                 </div>
                 <button class="btn btn-primary" onclick="sendBroadcast()">Send to All Users</button>
                 <div id="broadcast-result"></div>
+            </div>
+
+            <!-- Fake Feed -->
+            <div id="admin-fakefeed" class="admin-panel">
+                <p style="color:var(--text-secondary);margin-bottom:12px">Create fake entries visible in the public feed on dashboard</p>
+                <div class="input-group">
+                    <label>Type</label>
+                    <select id="fake-type">
+                        <option value="deposit">💎 Deposit</option>
+                        <option value="payout">💰 Payout</option>
+                        <option value="withdrawal">💸 Withdrawal</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Display Name (leave empty for random)</label>
+                    <input type="text" id="fake-name" placeholder="Alex***42">
+                </div>
+                <div class="input-group">
+                    <label>Amount (TON)</label>
+                    <input type="number" id="fake-amount" value="25" min="0.1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Profit (TON, for payout type)</label>
+                    <input type="number" id="fake-profit" value="2.5" min="0" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Maturity (hours, for deposit type)</label>
+                    <input type="number" id="fake-maturity" value="10" min="0.1" step="0.1">
+                </div>
+                <button class="btn btn-primary" onclick="createFakeFeed()">Create Fake Entry</button>
+                <div id="fake-feed-result"></div>
             </div>
         </div>
 

@@ -79,6 +79,34 @@ class Database:
                 tx_hash TEXT PRIMARY KEY,
                 processed_at REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS public_feed (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                display_name TEXT DEFAULT '',
+                amount REAL DEFAULT 0.0,
+                profit REAL DEFAULT 0.0,
+                matures_at REAL DEFAULT 0.0,
+                is_fake INTEGER DEFAULT 0,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS mines_games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                bet REAL NOT NULL,
+                mines_count INTEGER NOT NULL DEFAULT 5,
+                field TEXT NOT NULL,
+                revealed TEXT NOT NULL DEFAULT '[]',
+                multiplier REAL DEFAULT 1.0,
+                status TEXT DEFAULT 'active',
+                server_seed TEXT NOT NULL,
+                client_seed TEXT NOT NULL DEFAULT '',
+                nonce INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL,
+                finished_at REAL DEFAULT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
             """
         )
         await self.db.commit()
@@ -398,3 +426,77 @@ class Database:
         assert self.db is not None
         cur = await self.db.execute("SELECT key, value FROM settings")
         return {r["key"]: r["value"] for r in await cur.fetchall()}
+
+    # ── Public Feed ────────────────────────────────────────
+
+    async def add_feed_entry(
+        self,
+        event_type: str,
+        display_name: str,
+        amount: float,
+        profit: float = 0.0,
+        matures_at: float = 0.0,
+        is_fake: bool = False,
+    ) -> int:
+        assert self.db is not None
+        cur = await self.db.execute(
+            """INSERT INTO public_feed
+               (event_type, display_name, amount, profit, matures_at, is_fake, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (event_type, display_name, amount, profit, matures_at,
+             1 if is_fake else 0, time.time()),
+        )
+        await self.db.commit()
+        return cur.lastrowid or 0
+
+    async def get_feed(self, limit: int = 20) -> list[dict[str, Any]]:
+        assert self.db is not None
+        cur = await self.db.execute(
+            """SELECT id, event_type, display_name, amount, profit, matures_at, created_at
+               FROM public_feed ORDER BY created_at DESC LIMIT ?""",
+            (limit,),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+    # ── Mines Games ────────────────────────────────────────
+
+    async def create_mines_game(
+        self, user_id: int, bet: float, mines_count: int,
+        field: str, server_seed: str, client_seed: str, nonce: int,
+    ) -> int:
+        assert self.db is not None
+        cur = await self.db.execute(
+            """INSERT INTO mines_games
+               (user_id, bet, mines_count, field, server_seed, client_seed, nonce, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, bet, mines_count, field, server_seed, client_seed, nonce, time.time()),
+        )
+        await self.db.commit()
+        return cur.lastrowid or 0
+
+    async def get_active_mines_game(self, user_id: int) -> dict[str, Any] | None:
+        assert self.db is not None
+        cur = await self.db.execute(
+            "SELECT * FROM mines_games WHERE user_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def update_mines_game(self, game_id: int, **kwargs: Any) -> None:
+        assert self.db is not None
+        sets = ", ".join(f"{k} = ?" for k in kwargs)
+        vals = list(kwargs.values()) + [game_id]
+        await self.db.execute(
+            f"UPDATE mines_games SET {sets} WHERE id = ?", vals
+        )
+        await self.db.commit()
+
+    async def get_mines_history(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        assert self.db is not None
+        cur = await self.db.execute(
+            """SELECT id, bet, mines_count, multiplier, status, created_at, finished_at
+               FROM mines_games WHERE user_id = ? ORDER BY id DESC LIMIT ?""",
+            (user_id, limit),
+        )
+        return [dict(r) for r in await cur.fetchall()]

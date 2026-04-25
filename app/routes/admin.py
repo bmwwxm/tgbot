@@ -200,3 +200,49 @@ async def user_detail(user_id: int, admin: dict = Depends(require_admin)):
         "withdrawals": withdrawals,
         "referrals": referrals,
     }
+
+
+# ── Fake Feed ───────────────────────────────────────────
+
+class FakeFeedRequest(BaseModel):
+    event_type: str = "deposit"
+    display_name: str = ""
+    amount: float = 10.0
+    profit: float = 0.0
+    maturity_hours: float = 10.0
+
+
+@router.post("/fake-feed")
+async def create_fake_feed(req: FakeFeedRequest, admin: dict = Depends(require_admin)):
+    assert _db is not None
+    import time
+
+    allowed_types = {"deposit", "payout", "withdrawal"}
+    if req.event_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Type must be one of: {allowed_types}")
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    matures_at = time.time() + req.maturity_hours * 3600 if req.event_type == "deposit" else 0.0
+
+    fid = await _db.add_feed_entry(
+        event_type=req.event_type,
+        display_name=req.display_name or _random_name(),
+        amount=req.amount,
+        profit=req.profit,
+        matures_at=matures_at,
+        is_fake=True,
+    )
+    return {"status": "ok", "feed_id": fid}
+
+
+def _random_name() -> str:
+    import random
+    names = [
+        "Alex", "Maria", "Dmitry", "Anna", "Ivan", "Elena", "Sergey", "Olga",
+        "Maxim", "Natalia", "Andrey", "Ekaterina", "Pavel", "Tatyana", "Viktor",
+        "John", "Emma", "James", "Sophie", "Michael", "Lisa", "David", "Sarah",
+    ]
+    name = random.choice(names)
+    suffix = random.randint(10, 99)
+    return f"{name}***{suffix}"

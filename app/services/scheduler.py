@@ -13,6 +13,13 @@ from app.services.ton import ton_service
 
 logger = logging.getLogger(__name__)
 
+
+def _mask_name(name: str) -> str:
+    """Mask user name for public feed: 'Alexander' -> 'Ale***er'."""
+    if not name or len(name) < 3:
+        return "User***"
+    return name[:3] + "***" + name[-2:]
+
 scheduler = AsyncIOScheduler()
 
 _db: Database | None = None
@@ -55,8 +62,18 @@ async def _monitor_deposits() -> None:
     new_deposits = await check_deposits(_db, maturity, min_dep)
     profit_pct = await _get_effective_setting("profit_percent", config.profit_percent)
     maturity_h = maturity / 3600
+    import time as _time
     for dep in new_deposits:
         expected_profit = dep["amount"] * (profit_pct / 100.0)
+        user = await _db.get_user(dep["user_id"])
+        name = _mask_name(user.get("first_name", "") if user else "")
+        await _db.add_feed_entry(
+            event_type="deposit",
+            display_name=name,
+            amount=dep["amount"],
+            profit=expected_profit,
+            matures_at=_time.time() + maturity,
+        )
         if _bot_notify:
             try:
                 await _bot_notify(
@@ -91,6 +108,15 @@ async def _process_matured_deposits() -> None:
         await _db.add_balance(user_id, amount + profit)
         await _db.add_balance_field(user_id, "total_earned", profit)
         await _db.mark_deposit_paid(dep["id"], profit)
+
+        user_for_feed = await _db.get_user(user_id)
+        payout_name = _mask_name(user_for_feed.get("first_name", "") if user_for_feed else "")
+        await _db.add_feed_entry(
+            event_type="payout",
+            display_name=payout_name,
+            amount=amount,
+            profit=profit,
+        )
 
         logger.info(
             "Deposit #%d matured: user=%d amount=%.4f profit=%.4f",
@@ -155,8 +181,11 @@ async def _process_withdrawals() -> None:
             continue
 
         try:
+            bot_username = await _db.get_setting("bot_username")
+            bot_link = f"t.me/{bot_username}" if bot_username else config.webapp_url or "GoodMoney"
+            comment = f"GoodMoney | {bot_link}"
             tx_hash = await ton_service.send_ton(
-                to_addr, send_amount, comment="GoodMoney withdrawal"
+                to_addr, send_amount, comment=comment
             )
             await _db.mark_withdrawal_sent(wid, tx_hash)
             await _db.add_balance_field(user_id, "total_withdrawn", amount)

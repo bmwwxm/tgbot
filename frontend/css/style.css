@@ -1031,3 +1031,253 @@ body {
 tc-root {
     --tc-font-family: var(--font);
 }
+
+/* ── Live Feed ─────────────────────────────────────────── */
+
+.live-feed-section {
+    margin-top: 20px;
+    padding: 0 4px;
+}
+
+.feed-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    margin-bottom: 12px;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: livePulse 2s infinite;
+}
+
+@keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.live-feed-list {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.feed-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    animation: feedSlideIn 0.4s ease;
+}
+
+@keyframes feedSlideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.feed-item-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.feed-event-icon {
+    font-size: 18px;
+}
+
+.feed-name {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.feed-amount {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.feed-item-right {
+    text-align: right;
+}
+
+.feed-timer {
+    font-size: 11px;
+    color: var(--primary);
+}
+
+.feed-profit {
+    font-size: 12px;
+    color: var(--success);
+}
+
+.feed-time-ago {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ── Mines Game ────────────────────────────────────────── */
+
+.mines-setup {
+    padding: 0 4px;
+}
+
+.mines-balance-card {
+    background: var(--gradient-primary);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.mines-presets {
+    display: flex;
+    gap: 8px;
+}
+
+.mines-preset {
+    flex: 1;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mines-preset.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.mines-game-area {
+    padding: 0 4px;
+}
+
+.mines-info-bar {
+    display: flex;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.mines-next-mult {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.mines-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.mine-cell {
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.mine-cell:hover:not(.revealed):not(.mine):not(.disabled) {
+    border-color: var(--primary);
+    background: rgba(108, 92, 231, 0.15);
+}
+
+.mine-cell.revealed {
+    background: rgba(0, 210, 255, 0.15);
+    border-color: var(--secondary);
+    cursor: default;
+}
+
+.mine-cell.mine {
+    background: rgba(255, 71, 87, 0.2);
+    border-color: var(--danger);
+    cursor: default;
+}
+
+.mine-cell.disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #00b894, #00cec9) !important;
+    border: none !important;
+}
+
+.btn-accent {
+    background: linear-gradient(135deg, #fdcb6e, #e17055) !important;
+    border: none !important;
+}
+
+.mines-fairness {
+    padding: 0 4px;
+}
+
+.mines-fairness details {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+}
+
+.mines-fairness summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.fairness-info {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+.fairness-info code {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+/* ── Admin select ──────────────────────────────────────── */
+
+select {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--font);
+    appearance: none;
+}
