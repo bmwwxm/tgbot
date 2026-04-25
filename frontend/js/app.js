@@ -657,6 +657,72 @@ function switchAdminTab(tab) {
     if (tab === "users") loadAdminUsers();
     if (tab === "settings") loadAdminSettings();
     if (tab === "fakefeed") updateFakeStatus();
+    if (tab === "wallet") loadWalletStatus();
+}
+
+// ── Admin Wallet Mnemonic ─────────────────────────────
+
+async function loadWalletStatus() {
+    try {
+        const data = await apiCall("/api/admin/wallet/status");
+        const dot = document.getElementById("wallet-status-dot");
+        const text = document.getElementById("wallet-status-text");
+        const source = document.getElementById("wallet-status-source");
+        const addr = document.getElementById("wallet-status-addr");
+
+        if (data.is_set) {
+            dot.style.background = "var(--success)";
+            text.textContent = "Wallet configured";
+        } else {
+            dot.style.background = "var(--danger)";
+            text.textContent = "No wallet mnemonic set";
+        }
+        source.textContent = data.source || "—";
+        addr.textContent = data.wallet_address || "—";
+    } catch (e) {
+        document.getElementById("wallet-status-text").textContent = "Failed to load status";
+    }
+}
+
+// Live word-count feedback on the mnemonic textarea
+document.addEventListener("input", (e) => {
+    if (e.target.id === "wallet-mnemonic-input") {
+        const words = e.target.value.trim().split(/\s+/).filter(Boolean);
+        const counter = document.getElementById("wallet-word-count");
+        if (counter) {
+            counter.textContent = `${words.length} / 24 words`;
+            counter.style.color = words.length === 24 ? "var(--success)" : "var(--text-secondary)";
+        }
+    }
+});
+
+async function submitWalletMnemonic() {
+    const input = document.getElementById("wallet-mnemonic-input");
+    const resultEl = document.getElementById("wallet-mnemonic-result");
+    const mnemonic = input.value.trim();
+    const words = mnemonic.split(/\s+/).filter(Boolean);
+
+    if (words.length !== 24) {
+        resultEl.innerHTML = `<p style="color:var(--danger)">⚠️ Please enter exactly 24 words (got ${words.length}).</p>`;
+        return;
+    }
+
+    resultEl.innerHTML = `<p style="color:var(--text-secondary)">⏳ Validating and saving...</p>`;
+
+    try {
+        const res = await apiCall("/api/admin/wallet/set-mnemonic", "POST", {
+            mnemonic: words.join(" "),
+        });
+        input.value = "";
+        document.getElementById("wallet-word-count").textContent = "0 / 24 words";
+        document.getElementById("wallet-word-count").style.color = "var(--text-secondary)";
+        resultEl.innerHTML = `<p style="color:var(--success)">✅ Wallet set! Address: <code>${res.wallet_address}</code></p>`;
+        loadWalletStatus();
+        showToast("Wallet mnemonic saved!", "success");
+    } catch (e) {
+        resultEl.innerHTML = `<p style="color:var(--danger)">❌ ${e.message || "Error saving mnemonic"}</p>`;
+        showToast(e.message || t("error"), "error");
+    }
 }
 
 // ── Utils ─────────────────────────────────────────────
