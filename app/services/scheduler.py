@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import config
 from app.database import Database
 from app.feed_bot import post_to_feed
-from app.services.monitor import check_deposits
+from app.services.monitor import check_incoming
 from app.services.ton import ton_service
 
 logger = logging.getLogger(__name__)
@@ -52,46 +52,19 @@ async def _get_effective_setting(key: str, default: float) -> float:
 
 
 async def _monitor_deposits() -> None:
+    """Monitor incoming TON transfers and credit to user balance."""
     assert _db is not None
-    maturity = int(
-        await _get_effective_setting(
-            "deposit_maturity_seconds", config.deposit_maturity_seconds
-        )
-    )
-    min_dep = await _get_effective_setting("min_deposit", config.min_deposit)
-    new_deposits = await check_deposits(_db, maturity, min_dep)
-    profit_pct = await _get_effective_setting("profit_percent", config.profit_percent)
-    maturity_h = maturity / 3600
-    import time as _time
-    for dep in new_deposits:
-        expected_profit = dep["amount"] * (profit_pct / 100.0)
-        user = await _db.get_user(dep["user_id"])
-        name = _mask_name(user.get("first_name", "") if user else "")
-        await _db.add_feed_entry(
-            event_type="deposit",
-            display_name=name,
-            amount=dep["amount"],
-            profit=expected_profit,
-            matures_at=_time.time() + maturity,
-        )
+    credited = await check_incoming(_db)
+    for tx in credited:
         if _bot_notify:
             try:
                 await _bot_notify(
-                    dep["user_id"],
-                    "deposit_received",
-                    amount=dep["amount"],
+                    tx["user_id"],
+                    "balance_topped_up",
+                    amount=tx["amount"],
                 )
             except Exception as e:
                 logger.warning("Notify error: %s", e)
-        try:
-            await post_to_feed(
-                "deposit_received",
-                amount=dep["amount"],
-                profit=expected_profit,
-                hours=maturity_h,
-            )
-        except Exception as e:
-            logger.warning("Feed post error: %s", e)
 
 
 async def _process_matured_deposits() -> None:

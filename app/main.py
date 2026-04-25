@@ -41,7 +41,7 @@ app.add_middleware(
 db = Database(config.db_path)
 
 user_routes.init_routes(db)
-deposit_routes.init_routes(db)
+deposit_routes.init_routes(db, notify_user)
 withdraw_routes.init_routes(db)
 referral_routes.init_routes(db)
 admin_routes.init_routes(db)

@@ -324,7 +324,25 @@ async function loadDeposit() {
         const info = await apiCall("/api/deposit/info");
         document.getElementById("deposit-address").textContent = info.wallet_address || "-";
         document.getElementById("deposit-comment").textContent = info.deposit_comment || "-";
+        document.getElementById("dep-balance").textContent = (info.balance || 0).toFixed(4) + " TON";
     } catch (e) {}
+}
+
+async function createInvestment() {
+    const amount = parseFloat(document.getElementById("invest-amount").value);
+    if (!amount || amount < settings.min_deposit) {
+        showToast(t("min_deposit") + ": " + settings.min_deposit + " TON", "error");
+        return;
+    }
+    try {
+        const res = await apiCall("/api/deposit/invest", "POST", { amount });
+        showToast(t("success") + "! +" + res.profit.toFixed(2) + " TON " + t("in") + " " + res.maturity_hours + "h", "success");
+        document.getElementById("invest-amount").value = "";
+        await loadDeposit();
+        await loadDashboard();
+    } catch (e) {
+        showToast(e.message || t("error"), "error");
+    }
 }
 
 function switchDepositMethod(method) {

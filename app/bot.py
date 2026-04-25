@@ -56,6 +56,17 @@ TEXTS = {
             "🤝 <b>Реферальный бонус!</b>\n\n"
             "Вы получили <b>+{amount:.4f} TON</b> от реферала."
         ),
+        "balance_topped_up": (
+            "💰 <b>Баланс пополнен!</b>\n\n"
+            "Зачислено: <b>{amount:.4f} TON</b>\n"
+            "Средства доступны для инвестиций и игр."
+        ),
+        "investment_created": (
+            "📈 <b>Инвестиция создана!</b>\n\n"
+            "Сумма: <b>{amount:.4f} TON</b>\n"
+            "Прибыль: <b>+{profit:.4f} TON</b>\n"
+            "Начисление через: <b>{hours}ч</b>"
+        ),
     },
     "en": {
         "welcome": (
@@ -91,6 +102,17 @@ TEXTS = {
         "referral_bonus": (
             "🤝 <b>Referral bonus!</b>\n\n"
             "You received <b>+{amount:.4f} TON</b> from a referral."
+        ),
+        "balance_topped_up": (
+            "💰 <b>Balance topped up!</b>\n\n"
+            "Credited: <b>{amount:.4f} TON</b>\n"
+            "Funds available for investments and games."
+        ),
+        "investment_created": (
+            "📈 <b>Investment created!</b>\n\n"
+            "Amount: <b>{amount:.4f} TON</b>\n"
+            "Profit: <b>+{profit:.4f} TON</b>\n"
+            "Maturity in: <b>{hours}h</b>"
         ),
     },
 }

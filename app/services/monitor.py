@@ -1,4 +1,4 @@
-"""Monitors incoming TON deposits and matches them to users."""
+"""Monitors incoming TON transfers and credits them to user balance."""
 
 import logging
 
@@ -7,10 +7,13 @@ from app.services.ton import ton_service
 
 logger = logging.getLogger(__name__)
 
+# Minimum TON to accept (avoid dust)
+MIN_TOPUP = 0.1
 
-async def check_deposits(db: Database, maturity_seconds: int, min_deposit: float) -> list[dict]:
-    """Scan recent transactions, match deposits by comment, record new ones."""
-    new_deposits: list[dict] = []
+
+async def check_incoming(db: Database) -> list[dict]:
+    """Scan recent transactions, match by comment, credit to user balance."""
+    credited: list[dict] = []
     try:
         transactions = await ton_service.get_transactions(limit=50)
         incoming = ton_service.parse_incoming_transactions(transactions)
@@ -36,37 +39,29 @@ async def check_deposits(db: Database, maturity_seconds: int, min_deposit: float
             continue
 
         amount = tx["amount"]
-        if amount < min_deposit:
-            logger.info(
-                "Deposit from user %d below minimum: %.4f < %.4f",
-                user["user_id"], amount, min_deposit,
-            )
+        if amount < MIN_TOPUP:
             await db.mark_tx_processed(tx_hash)
             continue
 
         if user["is_blocked"]:
-            logger.info("Blocked user %d deposit ignored", user["user_id"])
+            logger.info("Blocked user %d top-up ignored", user["user_id"])
             await db.mark_tx_processed(tx_hash)
             continue
 
-        deposit_id = await db.add_deposit(
-            user_id=user["user_id"],
-            amount=amount,
-            tx_hash=tx_hash,
-            maturity_seconds=maturity_seconds,
-        )
+        await db.add_balance(user["user_id"], amount)
+        await db.add_balance_field(user["user_id"], "total_deposited", amount)
         await db.mark_tx_processed(tx_hash)
-        new_deposits.append(
+
+        credited.append(
             {
-                "deposit_id": deposit_id,
                 "user_id": user["user_id"],
                 "amount": amount,
                 "tx_hash": tx_hash,
             }
         )
         logger.info(
-            "New deposit #%d: user=%d amount=%.4f",
-            deposit_id, user["user_id"], amount,
+            "Top-up: user=%d amount=%.4f tx=%s",
+            user["user_id"], amount, tx_hash,
         )
 
-    return new_deposits
+    return credited
