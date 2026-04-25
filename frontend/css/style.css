@@ -64,7 +64,7 @@ body {
 
 /* ── Loading Screen ───────────────────────────────────── */
 
-#loading-screen {
+#loading-screen.active {
     display: flex;
     align-items: center;
     justify-content: center;
