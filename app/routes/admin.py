@@ -1,11 +1,14 @@
 import time
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from pydantic import BaseModel
 
 from app.config import config
 from app.database import Database
 from app.routes.user import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -35,6 +38,9 @@ async def stats(admin: dict = Depends(require_admin)):
     wd_stats = await _db.get_withdrawals_stats()
     wallet_balance = await ton_service.get_wallet_balance()
 
+    # Today's stats
+    today_stats = await _db.get_today_stats()
+
     return {
         "total_users": user_count,
         "total_deposits": dep_stats.get("total_count", 0),
@@ -45,6 +51,13 @@ async def stats(admin: dict = Depends(require_admin)):
         "total_withdrawn": wd_stats.get("total_sent", 0),
         "wallet_balance": wallet_balance,
         "wallet_address": ton_service.wallet_address,
+        "today_users": today_stats.get("today_users", 0),
+        "today_deposits": today_stats.get("today_deposits", 0),
+        "today_deposit_amount": today_stats.get("today_deposit_amount", 0),
+        "today_withdrawals": today_stats.get("today_withdrawals", 0),
+        "today_withdrawn": today_stats.get("today_withdrawn", 0),
+        "pending_withdrawals": today_stats.get("pending_withdrawals", 0),
+        "total_balance": today_stats.get("total_balance", 0),
     }
 
 
@@ -227,6 +240,18 @@ async def broadcast(req: BroadcastRequest, admin: dict = Depends(require_admin))
     }
 
 
+class BroadcastSend(BaseModel):
+    user_ids: list[int]
+    message: str
+
+
+@router.post("/broadcast/send")
+async def broadcast_send(req: BroadcastSend, admin: dict = Depends(require_admin)):
+    from app.bot import broadcast_message
+    result = await broadcast_message(req.user_ids, req.message)
+    return result
+
+
 # ── User detail ─────────────────────────────────────────
 
 @router.get("/user/{user_id}")
@@ -238,12 +263,81 @@ async def user_detail(user_id: int, admin: dict = Depends(require_admin)):
     deposits = await _db.get_user_deposits(user_id)
     withdrawals = await _db.get_user_withdrawals(user_id)
     referrals = await _db.get_referrals(user_id)
+    games = await _db.get_user_games(user_id)
+    tasks = await _db.get_user_tasks(user_id)
     return {
         "user": user,
         "deposits": deposits,
         "withdrawals": withdrawals,
         "referrals": referrals,
+        "games": games,
+        "tasks": tasks,
     }
+
+
+# ── Search users ────────────────────────────────────────
+
+@router.get("/search")
+async def search_users(
+    q: str = Query("", min_length=0),
+    admin: dict = Depends(require_admin),
+):
+    assert _db is not None
+    if not q.strip():
+        return {"users": [], "total": 0}
+    users = await _db.search_users(q.strip())
+    return {"users": users, "total": len(users)}
+
+
+# ── Pending Withdrawals ────────────────────────────────
+
+@router.get("/withdrawals")
+async def list_withdrawals(
+    status: str = "pending",
+    limit: int = 50,
+    offset: int = 0,
+    admin: dict = Depends(require_admin),
+):
+    assert _db is not None
+    withdrawals = await _db.get_all_withdrawals(status=status, limit=limit, offset=offset)
+    return {"withdrawals": withdrawals}
+
+
+# ── Active Deposits ─────────────────────────────────────
+
+@router.get("/deposits")
+async def list_deposits(
+    status: str = "active",
+    limit: int = 50,
+    offset: int = 0,
+    admin: dict = Depends(require_admin),
+):
+    assert _db is not None
+    deposits = await _db.get_all_deposits(status=status, limit=limit, offset=offset)
+    return {"deposits": deposits}
+
+
+# ── Send message to user ───────────────────────────────
+
+class SendMessageRequest(BaseModel):
+    user_id: int
+    message: str
+
+
+@router.post("/send-message")
+async def send_message_to_user(req: SendMessageRequest, admin: dict = Depends(require_admin)):
+    assert _db is not None
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Empty message")
+    user = await _db.get_user(req.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        from app.bot import send_raw_message
+        await send_raw_message(req.user_id, req.message.strip())
+        return {"status": "ok", "user_id": req.user_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Fake Feed ───────────────────────────────────────────

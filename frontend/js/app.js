@@ -397,44 +397,32 @@ async function loadAdmin() {
 
 async function loadAdminStats() {
     try {
-        const stats = await apiCall("/api/admin/stats");
-        document.getElementById("a-users").textContent = stats.total_users;
-        document.getElementById("a-deposits").textContent = stats.total_deposits;
-        document.getElementById("a-dep-vol").textContent = (stats.total_deposit_amount || 0).toFixed(2) + " TON";
-        document.getElementById("a-profit").textContent = (stats.total_profit_paid || 0).toFixed(2) + " TON";
-        document.getElementById("a-pending").textContent = stats.pending_deposits;
-        document.getElementById("a-withdrawals").textContent = stats.total_withdrawals;
-        document.getElementById("a-withdrawn").textContent = (stats.total_withdrawn || 0).toFixed(2) + " TON";
-        document.getElementById("a-wallet").textContent = (stats.wallet_balance || 0).toFixed(4) + " TON";
-        document.getElementById("a-wallet-addr").textContent = stats.wallet_address || "-";
+        const s = await apiCall("/api/admin/stats");
+        // Today
+        document.getElementById("a-today-users").textContent = s.today_users || 0;
+        document.getElementById("a-today-deposits").textContent = s.today_deposits || 0;
+        document.getElementById("a-today-dep-vol").textContent = (s.today_deposit_amount || 0).toFixed(2);
+        document.getElementById("a-today-wd").textContent = s.today_withdrawals || 0;
+        // All time
+        document.getElementById("a-users").textContent = s.total_users;
+        document.getElementById("a-deposits").textContent = s.total_deposits;
+        document.getElementById("a-dep-vol").textContent = (s.total_deposit_amount || 0).toFixed(2);
+        document.getElementById("a-profit").textContent = (s.total_profit_paid || 0).toFixed(2);
+        document.getElementById("a-pending").textContent = s.pending_deposits;
+        document.getElementById("a-withdrawals").textContent = s.total_withdrawals;
+        document.getElementById("a-withdrawn").textContent = (s.total_withdrawn || 0).toFixed(2);
+        document.getElementById("a-pending-wd").textContent = s.pending_withdrawals || 0;
+        // Finance
+        document.getElementById("a-wallet").textContent = (s.wallet_balance || 0).toFixed(4);
+        document.getElementById("a-total-balance").textContent = (s.total_balance || 0).toFixed(2);
+        document.getElementById("a-wallet-addr").textContent = s.wallet_address || "-";
     } catch (e) {}
 }
 
 async function loadAdminUsers() {
     try {
         const data = await apiCall(`/api/admin/users?limit=20&offset=${adminPage * 20}`);
-        const list = document.getElementById("admin-user-list");
-        list.innerHTML = data.users.map(u => `
-            <div class="admin-user-item">
-                <div class="admin-user-header">
-                    <span class="admin-user-name">${u.first_name || u.username || "ID:" + u.user_id}
-                        ${u.is_admin ? " ⭐" : ""} ${u.is_blocked ? " 🚫" : ""}
-                    </span>
-                    <div class="admin-user-actions">
-                        <button onclick="toggleBlock(${u.user_id}, ${!u.is_blocked})">${u.is_blocked ? "Unblock" : "Block"}</button>
-                        <button onclick="toggleAdmin(${u.user_id}, ${!u.is_admin})">${u.is_admin ? "Remove Admin" : "Make Admin"}</button>
-                        <button onclick="promptAdjustBalance(${u.user_id})">Balance</button>
-                        <button onclick="promptAdminDeposit(${u.user_id})">Deposit</button>
-                    </div>
-                </div>
-                <div class="admin-user-details">
-                    <span>ID: ${u.user_id}</span>
-                    <span>Balance: ${(u.balance || 0).toFixed(4)}</span>
-                    <span>Deposited: ${(u.total_deposited || 0).toFixed(2)}</span>
-                    <span>Withdrawn: ${(u.total_withdrawn || 0).toFixed(2)}</span>
-                </div>
-            </div>
-        `).join("");
+        renderAdminUserList(data.users);
         document.getElementById("admin-users-page").textContent = adminPage + 1;
     } catch (e) {}
 }
@@ -604,7 +592,271 @@ function switchAdminTab(tab) {
     if (tab === "stats") loadAdminStats();
     if (tab === "users") loadAdminUsers();
     if (tab === "settings") loadAdminSettings();
+    if (tab === "withdrawals") loadAdminWithdrawals("pending");
+    if (tab === "deposits") loadAdminDeposits("active");
     if (tab === "fakefeed") updateFakeStatus();
+}
+
+// ── Admin Search ──
+let _searchTimer = null;
+function debounceAdminSearch() {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(adminSearch, 400);
+}
+async function adminSearch() {
+    const q = document.getElementById("admin-user-search").value.trim();
+    if (!q) { loadAdminUsers(); return; }
+    try {
+        const data = await apiCall(`/api/admin/search?q=${encodeURIComponent(q)}`);
+        renderAdminUserList(data.users);
+    } catch (e) {}
+}
+
+// ── Admin Withdrawals ──
+async function loadAdminWithdrawals(status, btn) {
+    if (btn) {
+        document.querySelectorAll("#admin-withdrawals .admin-filter").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+    }
+    try {
+        const data = await apiCall(`/api/admin/withdrawals?status=${status}`);
+        const list = document.getElementById("admin-wd-list");
+        if (!data.withdrawals.length) {
+            list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">Нет записей</p>';
+            return;
+        }
+        list.innerHTML = data.withdrawals.map(w => {
+            const date = new Date(w.created_at * 1000).toLocaleString();
+            const name = w.first_name || w.username || "ID:" + w.user_id;
+            const txLink = w.tx_hash && w.tx_hash !== "sent" && w.tx_hash !== ""
+                ? ` <a href="https://tonviewer.com/transaction/${encodeURIComponent(w.tx_hash)}" target="_blank" style="color:var(--accent);font-size:11px">TX↗</a>` : "";
+            return `
+                <div class="admin-list-item" onclick="openUserDetail(${w.user_id})">
+                    <div class="admin-list-main">
+                        <span class="admin-list-name">${name}</span>
+                        <span class="admin-list-amount">${w.amount.toFixed(4)} TON</span>
+                    </div>
+                    <div class="admin-list-sub">
+                        <span>${date}</span>
+                        <span>→ ${(w.to_address || "").substring(0, 12)}...</span>
+                        <span class="status-badge ${w.status}">${w.status}</span>${txLink}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } catch (e) {}
+}
+
+// ── Admin Deposits ──
+async function loadAdminDeposits(status, btn) {
+    if (btn) {
+        document.querySelectorAll("#admin-deposits .admin-filter").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+    }
+    try {
+        const data = await apiCall(`/api/admin/deposits?status=${status}`);
+        const list = document.getElementById("admin-dep-list");
+        if (!data.deposits.length) {
+            list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">Нет записей</p>';
+            return;
+        }
+        list.innerHTML = data.deposits.map(d => {
+            const date = new Date(d.created_at * 1000).toLocaleString();
+            const name = d.first_name || d.username || "ID:" + d.user_id;
+            const maturesAt = d.matures_at ? new Date(d.matures_at * 1000).toLocaleString() : "-";
+            return `
+                <div class="admin-list-item" onclick="openUserDetail(${d.user_id})">
+                    <div class="admin-list-main">
+                        <span class="admin-list-name">${name}</span>
+                        <span class="admin-list-amount">${d.amount.toFixed(4)} TON</span>
+                    </div>
+                    <div class="admin-list-sub">
+                        <span>${date}</span>
+                        <span>Expires: ${maturesAt}</span>
+                        <span class="status-badge ${d.status}">${d.status}</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } catch (e) {}
+}
+
+// ── User Detail Modal ──
+async function openUserDetail(userId) {
+    try {
+        const data = await apiCall(`/api/admin/user/${userId}`);
+        const u = data.user;
+        const existing = document.getElementById("user-detail-modal");
+        if (existing) existing.remove();
+
+        const modal = document.createElement("div");
+        modal.id = "user-detail-modal";
+        modal.className = "modal-overlay";
+
+        const depositsHtml = (data.deposits || []).slice(0, 10).map(d =>
+            `<div class="detail-row"><span>${d.amount.toFixed(4)} TON</span><span class="status-badge ${d.status}">${d.status}</span><span>${new Date(d.created_at*1000).toLocaleDateString()}</span></div>`
+        ).join("") || '<p class="no-data">—</p>';
+
+        const wdHtml = (data.withdrawals || []).slice(0, 10).map(w =>
+            `<div class="detail-row"><span>${w.amount.toFixed(4)} TON</span><span class="status-badge ${w.status}">${w.status}</span><span>${new Date(w.created_at*1000).toLocaleDateString()}</span></div>`
+        ).join("") || '<p class="no-data">—</p>';
+
+        const gamesHtml = (data.games || []).slice(0, 10).map(g =>
+            `<div class="detail-row"><span>${g.bet.toFixed(4)} TON (x${g.mines_count})</span><span class="status-badge ${g.status}">${g.status}</span><span>x${(g.multiplier || 0).toFixed(2)}</span></div>`
+        ).join("") || '<p class="no-data">—</p>';
+
+        const refsHtml = (data.referrals || []).slice(0, 10).map(r =>
+            `<div class="detail-row"><span>${r.first_name || r.username || r.user_id}</span><span>${(r.total_deposited||0).toFixed(2)} TON</span></div>`
+        ).join("") || '<p class="no-data">—</p>';
+
+        const tasksHtml = (data.tasks || []).map(t =>
+            `<div class="detail-row"><span>${t.task_id}</span><span>${new Date(t.completed_at*1000).toLocaleDateString()}</span></div>`
+        ).join("") || '<p class="no-data">—</p>';
+
+        modal.innerHTML = `
+            <div class="modal-content modal-wide">
+                <div class="modal-header">
+                    <h3>${u.first_name || u.username || "User"} ${u.is_admin ? "⭐" : ""} ${u.is_blocked ? "🚫" : ""}</h3>
+                    <button class="modal-close" onclick="document.getElementById('user-detail-modal').remove()">✕</button>
+                </div>
+                <div class="user-detail-grid">
+                    <div class="detail-card">
+                        <span class="detail-label">ID</span>
+                        <span class="detail-val">${u.user_id}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Username</span>
+                        <span class="detail-val">@${u.username || "-"}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Balance</span>
+                        <span class="detail-val">${(u.balance||0).toFixed(4)}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Deposited</span>
+                        <span class="detail-val">${(u.total_deposited||0).toFixed(2)}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Withdrawn</span>
+                        <span class="detail-val">${(u.total_withdrawn||0).toFixed(2)}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Ref Earnings</span>
+                        <span class="detail-val">${(u.referral_earnings||0).toFixed(2)}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Registered</span>
+                        <span class="detail-val">${new Date(u.created_at*1000).toLocaleDateString()}</span>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Language</span>
+                        <span class="detail-val">${u.language || "-"}</span>
+                    </div>
+                </div>
+
+                <div class="detail-actions">
+                    <button class="btn btn-small" onclick="document.getElementById('user-detail-modal').remove();promptAdjustBalance(${u.user_id})">💰 Balance</button>
+                    <button class="btn btn-small" onclick="document.getElementById('user-detail-modal').remove();promptAdminDeposit(${u.user_id})">💎 Deposit</button>
+                    <button class="btn btn-small" onclick="document.getElementById('user-detail-modal').remove();toggleBlock(${u.user_id}, ${!u.is_blocked})">${u.is_blocked ? "🔓 Unblock" : "🚫 Block"}</button>
+                    <button class="btn btn-small" onclick="document.getElementById('user-detail-modal').remove();promptSendDM(${u.user_id})">✉️ Message</button>
+                </div>
+
+                <div class="detail-section">
+                    <h4>💎 Deposits (${(data.deposits||[]).length})</h4>
+                    ${depositsHtml}
+                </div>
+                <div class="detail-section">
+                    <h4>💸 Withdrawals (${(data.withdrawals||[]).length})</h4>
+                    ${wdHtml}
+                </div>
+                <div class="detail-section">
+                    <h4>💣 Games (${(data.games||[]).length})</h4>
+                    ${gamesHtml}
+                </div>
+                <div class="detail-section">
+                    <h4>👥 Referrals (${(data.referrals||[]).length})</h4>
+                    ${refsHtml}
+                </div>
+                <div class="detail-section">
+                    <h4>📋 Tasks (${(data.tasks||[]).length})</h4>
+                    ${tasksHtml}
+                </div>
+            </div>
+        `;
+        document.getElementById("app").appendChild(modal);
+    } catch (e) {
+        showToast("Error loading user", "error");
+    }
+}
+
+function promptSendDM(userId) {
+    const existing = document.getElementById("dm-modal");
+    if (existing) existing.remove();
+    const modal = document.createElement("div");
+    modal.id = "dm-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>✉️ Сообщение пользователю ${userId}</h3>
+            <div class="input-group">
+                <textarea id="dm-modal-text" rows="4" placeholder="Текст сообщения (HTML)..." autofocus></textarea>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="btn btn-primary" onclick="submitDM(${userId})">Отправить</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('dm-modal').remove()">Отмена</button>
+            </div>
+        </div>
+    `;
+    document.getElementById("app").appendChild(modal);
+}
+
+async function submitDM(userId) {
+    const text = document.getElementById("dm-modal-text").value.trim();
+    if (!text) return;
+    try {
+        await apiCall("/api/admin/send-message", "POST", { user_id: userId, message: text });
+        showToast("Отправлено!", "success");
+        document.getElementById("dm-modal").remove();
+    } catch (e) {
+        showToast(e.message || "Error", "error");
+    }
+}
+
+async function sendDM() {
+    const userId = parseInt(document.getElementById("dm-user-id").value);
+    const msg = document.getElementById("dm-message").value.trim();
+    if (!userId || !msg) { showToast("Заполните все поля", "error"); return; }
+    try {
+        await apiCall("/api/admin/send-message", "POST", { user_id: userId, message: msg });
+        document.getElementById("dm-result").innerHTML = '<p style="color:var(--success);margin-top:8px">Отправлено!</p>';
+        document.getElementById("dm-message").value = "";
+    } catch (e) {
+        document.getElementById("dm-result").innerHTML = `<p style="color:var(--error);margin-top:8px">${e.message || "Error"}</p>`;
+    }
+}
+
+function renderAdminUserList(users) {
+    const list = document.getElementById("admin-user-list");
+    list.innerHTML = users.map(u => `
+        <div class="admin-user-item" onclick="openUserDetail(${u.user_id})">
+            <div class="admin-user-header">
+                <span class="admin-user-name">${u.first_name || u.username || "ID:" + u.user_id}
+                    ${u.is_admin ? " ⭐" : ""} ${u.is_blocked ? " 🚫" : ""}
+                </span>
+                <div class="admin-user-actions" onclick="event.stopPropagation()">
+                    <button onclick="toggleBlock(${u.user_id}, ${!u.is_blocked})">${u.is_blocked ? "Unblock" : "Block"}</button>
+                    <button onclick="promptAdjustBalance(${u.user_id})">Balance</button>
+                    <button onclick="promptAdminDeposit(${u.user_id})">Deposit</button>
+                </div>
+            </div>
+            <div class="admin-user-details">
+                <span>ID: ${u.user_id}</span>
+                <span>Bal: ${(u.balance || 0).toFixed(4)}</span>
+                <span>Dep: ${(u.total_deposited || 0).toFixed(2)}</span>
+                <span>WD: ${(u.total_withdrawn || 0).toFixed(2)}</span>
+            </div>
+        </div>
+    `).join("");
 }
 
 // ── Utils ─────────────────────────────────────────────

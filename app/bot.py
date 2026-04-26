@@ -255,6 +255,12 @@ async def notify_user(user_id: int, event: str, **kwargs) -> None:
         logger.warning("Failed to notify user %d: %s", user_id, e)
 
 
+async def send_raw_message(user_id: int, text: str) -> None:
+    if not bot:
+        raise RuntimeError("Bot not initialized")
+    await bot.send_message(user_id, text, parse_mode="HTML")
+
+
 async def broadcast_message(user_ids: list[int], message_text: str) -> dict:
     if not bot:
         return {"sent": 0, "failed": 0}

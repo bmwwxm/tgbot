@@ -404,6 +404,92 @@ class Database:
             )
         return dict(row) if row else {}
 
+    async def get_today_stats(self) -> dict[str, Any]:
+        assert self.pool is not None
+        today_start = time.time() - (time.time() % 86400)
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """SELECT
+                    (SELECT COUNT(*) FROM users WHERE created_at >= $1) as today_users,
+                    (SELECT COUNT(*) FROM deposits WHERE created_at >= $1) as today_deposits,
+                    (SELECT COALESCE(SUM(amount), 0) FROM deposits WHERE created_at >= $1) as today_deposit_amount,
+                    (SELECT COUNT(*) FROM withdrawals WHERE created_at >= $1) as today_withdrawals,
+                    (SELECT COALESCE(SUM(amount), 0) FROM withdrawals WHERE created_at >= $1 AND status='sent') as today_withdrawn,
+                    (SELECT COUNT(*) FROM withdrawals WHERE status='pending') as pending_withdrawals,
+                    (SELECT COALESCE(SUM(balance), 0) FROM users) as total_balance
+                """,
+                today_start,
+            )
+        return dict(row) if row else {}
+
+    async def search_users(self, query: str) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            try:
+                uid = int(query)
+                rows = await conn.fetch(
+                    "SELECT * FROM users WHERE user_id = $1", uid
+                )
+            except ValueError:
+                rows = await conn.fetch(
+                    "SELECT * FROM users WHERE LOWER(username) LIKE $1 OR LOWER(first_name) LIKE $1 ORDER BY created_at DESC LIMIT 50",
+                    f"%{query.lower()}%",
+                )
+        return self._rows_to_list(rows)
+
+    async def get_all_withdrawals(self, status: str = "pending", limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT w.*, u.username, u.first_name
+                   FROM withdrawals w
+                   LEFT JOIN users u ON w.user_id = u.user_id
+                   WHERE w.status = $1
+                   ORDER BY w.created_at DESC LIMIT $2 OFFSET $3""",
+                status, limit, offset,
+            )
+        return self._rows_to_list(rows)
+
+    async def get_all_deposits(self, status: str = "active", limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            if status == "all":
+                rows = await conn.fetch(
+                    """SELECT d.*, u.username, u.first_name
+                       FROM deposits d
+                       LEFT JOIN users u ON d.user_id = u.user_id
+                       ORDER BY d.created_at DESC LIMIT $1 OFFSET $2""",
+                    limit, offset,
+                )
+            else:
+                rows = await conn.fetch(
+                    """SELECT d.*, u.username, u.first_name
+                       FROM deposits d
+                       LEFT JOIN users u ON d.user_id = u.user_id
+                       WHERE d.status = $1
+                       ORDER BY d.created_at DESC LIMIT $2 OFFSET $3""",
+                    status, limit, offset,
+                )
+        return self._rows_to_list(rows)
+
+    async def get_user_games(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, bet, mines_count, status, multiplier, created_at, finished_at FROM mines_games WHERE user_id = $1 ORDER BY id DESC LIMIT $2",
+                user_id, limit,
+            )
+        return self._rows_to_list(rows)
+
+    async def get_user_tasks(self, user_id: int) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM task_completions WHERE user_id = $1 ORDER BY completed_at DESC",
+                user_id,
+            )
+        return self._rows_to_list(rows)
+
     # ── Processed Transactions ─────────────────────────────
 
     async def is_tx_processed(self, tx_hash: str) -> bool:

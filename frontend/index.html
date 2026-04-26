@@ -375,24 +375,39 @@
             </div>
 
             <div class="admin-tabs">
-                <button class="admin-tab active" onclick="switchAdminTab('stats')">📊 Stats</button>
-                <button class="admin-tab" onclick="switchAdminTab('users')">👥 Users</button>
-                <button class="admin-tab" onclick="switchAdminTab('settings')">⚙️ Settings</button>
-                <button class="admin-tab" onclick="switchAdminTab('broadcast')">📢 Broadcast</button>
-                <button class="admin-tab" onclick="switchAdminTab('fakefeed')">📡 Feed</button>
+                <button class="admin-tab active" onclick="switchAdminTab('stats')">📊</button>
+                <button class="admin-tab" onclick="switchAdminTab('users')">👥</button>
+                <button class="admin-tab" onclick="switchAdminTab('withdrawals')">💸</button>
+                <button class="admin-tab" onclick="switchAdminTab('deposits')">💎</button>
+                <button class="admin-tab" onclick="switchAdminTab('settings')">⚙️</button>
+                <button class="admin-tab" onclick="switchAdminTab('broadcast')">📢</button>
+                <button class="admin-tab" onclick="switchAdminTab('fakefeed')">📡</button>
             </div>
 
             <!-- Stats -->
             <div id="admin-stats" class="admin-panel active">
+                <h3 style="margin-bottom:8px;font-size:14px;color:var(--text-secondary)">📊 Сегодня</h3>
+                <div class="admin-stats-grid">
+                    <div class="admin-stat today"><span class="admin-stat-label">Новые юзеры</span><span class="admin-stat-value" id="a-today-users">0</span></div>
+                    <div class="admin-stat today"><span class="admin-stat-label">Депозиты</span><span class="admin-stat-value" id="a-today-deposits">0</span></div>
+                    <div class="admin-stat today"><span class="admin-stat-label">Объём деп.</span><span class="admin-stat-value" id="a-today-dep-vol">0</span></div>
+                    <div class="admin-stat today"><span class="admin-stat-label">Выводы</span><span class="admin-stat-value" id="a-today-wd">0</span></div>
+                </div>
+                <h3 style="margin:12px 0 8px;font-size:14px;color:var(--text-secondary)">📈 Всего</h3>
                 <div class="admin-stats-grid">
                     <div class="admin-stat"><span class="admin-stat-label">Users</span><span class="admin-stat-value" id="a-users">0</span></div>
                     <div class="admin-stat"><span class="admin-stat-label">Deposits</span><span class="admin-stat-value" id="a-deposits">0</span></div>
-                    <div class="admin-stat"><span class="admin-stat-label">Deposit Volume</span><span class="admin-stat-value" id="a-dep-vol">0 TON</span></div>
-                    <div class="admin-stat"><span class="admin-stat-label">Profit Paid</span><span class="admin-stat-value" id="a-profit">0 TON</span></div>
-                    <div class="admin-stat"><span class="admin-stat-label">Pending</span><span class="admin-stat-value" id="a-pending">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Deposit Vol</span><span class="admin-stat-value" id="a-dep-vol">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Profit Paid</span><span class="admin-stat-value" id="a-profit">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Pending Dep</span><span class="admin-stat-value" id="a-pending">0</span></div>
                     <div class="admin-stat"><span class="admin-stat-label">Withdrawals</span><span class="admin-stat-value" id="a-withdrawals">0</span></div>
-                    <div class="admin-stat"><span class="admin-stat-label">Withdrawn</span><span class="admin-stat-value" id="a-withdrawn">0 TON</span></div>
-                    <div class="admin-stat highlight"><span class="admin-stat-label">Wallet Balance</span><span class="admin-stat-value" id="a-wallet">0 TON</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Withdrawn</span><span class="admin-stat-value" id="a-withdrawn">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Pending WD</span><span class="admin-stat-value" id="a-pending-wd">0</span></div>
+                </div>
+                <h3 style="margin:12px 0 8px;font-size:14px;color:var(--text-secondary)">💰 Финансы</h3>
+                <div class="admin-stats-grid">
+                    <div class="admin-stat highlight"><span class="admin-stat-label">Hot Wallet</span><span class="admin-stat-value" id="a-wallet">0</span></div>
+                    <div class="admin-stat highlight"><span class="admin-stat-label">Балансы юзеров</span><span class="admin-stat-value" id="a-total-balance">0</span></div>
                 </div>
                 <div class="admin-wallet-addr">
                     <small>Wallet: <code id="a-wallet-addr">-</code></small>
@@ -401,12 +416,35 @@
 
             <!-- Users -->
             <div id="admin-users" class="admin-panel">
+                <div class="admin-search">
+                    <input type="text" id="admin-user-search" placeholder="🔍 Поиск по ID, имени или username..." oninput="debounceAdminSearch()">
+                </div>
                 <div class="admin-user-list" id="admin-user-list"></div>
                 <div class="admin-pagination">
                     <button class="btn btn-small" onclick="adminUsersPage(-1)">← Prev</button>
                     <span id="admin-users-page">1</span>
                     <button class="btn btn-small" onclick="adminUsersPage(1)">Next →</button>
                 </div>
+            </div>
+
+            <!-- Withdrawals -->
+            <div id="admin-withdrawals" class="admin-panel">
+                <div class="admin-filter-row">
+                    <button class="admin-filter active" onclick="loadAdminWithdrawals('pending', this)">Pending</button>
+                    <button class="admin-filter" onclick="loadAdminWithdrawals('sent', this)">Sent</button>
+                    <button class="admin-filter" onclick="loadAdminWithdrawals('failed', this)">Failed</button>
+                </div>
+                <div id="admin-wd-list"></div>
+            </div>
+
+            <!-- Deposits -->
+            <div id="admin-deposits" class="admin-panel">
+                <div class="admin-filter-row">
+                    <button class="admin-filter active" onclick="loadAdminDeposits('active', this)">Active</button>
+                    <button class="admin-filter" onclick="loadAdminDeposits('matured', this)">Matured</button>
+                    <button class="admin-filter" onclick="loadAdminDeposits('all', this)">All</button>
+                </div>
+                <div id="admin-dep-list"></div>
             </div>
 
             <!-- Settings -->
@@ -418,11 +456,25 @@
             <!-- Broadcast -->
             <div id="admin-broadcast" class="admin-panel">
                 <div class="input-group">
-                    <label>Message (HTML supported)</label>
-                    <textarea id="broadcast-message" rows="5" placeholder="Enter message..."></textarea>
+                    <label>📢 Рассылка всем (HTML)</label>
+                    <textarea id="broadcast-message" rows="5" placeholder="Введите сообщение..."></textarea>
                 </div>
-                <button class="btn btn-primary" onclick="sendBroadcast()">Send to All Users</button>
+                <button class="btn btn-primary" onclick="sendBroadcast()">Отправить всем</button>
                 <div id="broadcast-result"></div>
+
+                <hr style="border-color:var(--border);margin:20px 0">
+
+                <h3 style="font-size:14px;margin-bottom:12px">✉️ Личное сообщение</h3>
+                <div class="input-group">
+                    <label>User ID</label>
+                    <input type="number" id="dm-user-id" placeholder="Telegram User ID">
+                </div>
+                <div class="input-group">
+                    <label>Сообщение (HTML)</label>
+                    <textarea id="dm-message" rows="3" placeholder="Введите сообщение..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="sendDM()">Отправить</button>
+                <div id="dm-result"></div>
             </div>
 
             <!-- Fake Feed -->
