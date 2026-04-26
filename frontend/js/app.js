@@ -64,7 +64,7 @@ function navigate(screen) {
     }
 
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-    const navMap = { dashboard: 0, history: 1, referral: 2, admin: 3 };
+    const navMap = { dashboard: 0, history: 1, tasks: 2, referral: 3, admin: 4 };
     const navBtns = document.querySelectorAll(".nav-btn");
     if (navMap[screen] !== undefined && navBtns[navMap[screen]]) {
         navBtns[navMap[screen]].classList.add("active");
@@ -75,6 +75,7 @@ function navigate(screen) {
     if (screen === "withdraw") loadWithdraw();
     if (screen === "history") loadHistory();
     if (screen === "referral") loadReferral();
+    if (screen === "tasks") loadTasks();
     if (screen === "admin") loadAdmin();
     if (screen === "mines") loadMines();
 }
@@ -330,6 +331,49 @@ function shareReferral() {
         } else {
             copyText(link);
         }
+    }
+}
+
+// ── Tasks ─────────────────────────────────────────────
+
+async function loadTasks() {
+    if (!user) return;
+    const container = document.getElementById("tasks-list");
+    try {
+        const data = await apiCall("/api/tasks");
+        const tasks = data.tasks;
+        if (!tasks || tasks.length === 0) {
+            container.innerHTML = `<p style="text-align:center;color:var(--text-secondary)">${t("no_tasks")}</p>`;
+            return;
+        }
+        container.innerHTML = tasks.map(task => `
+            <div class="task-card ${task.completed ? 'task-completed' : ''}">
+                <div class="task-info">
+                    <div class="task-name">${t("task_" + task.id)}</div>
+                    <div class="task-reward">+${task.reward} TON</div>
+                </div>
+                <div class="task-actions">
+                    <a href="${task.link}" target="_blank" class="btn btn-secondary btn-small">${t("task_go")}</a>
+                    ${task.completed
+                        ? `<span class="task-done">${t("task_done")}</span>`
+                        : `<button class="btn btn-primary btn-small" onclick="claimTask('${task.id}')">${t("task_check")}</button>`
+                    }
+                </div>
+            </div>
+        `).join("");
+    } catch (e) {
+        container.innerHTML = `<p style="text-align:center;color:var(--text-secondary)">${t("error")}</p>`;
+    }
+}
+
+async function claimTask(taskId) {
+    try {
+        const res = await apiCall("/api/tasks/claim", "POST", { task_id: taskId });
+        showToast(`+${res.reward} TON! ${t("task_done")}`, "success");
+        await loadTasks();
+        await loadDashboard();
+    } catch (e) {
+        showToast(e.message || t("error"), "error");
     }
 }
 

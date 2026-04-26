@@ -18,6 +18,7 @@ from app.routes import referral as referral_routes
 from app.routes import admin as admin_routes
 from app.routes import feed as feed_routes
 from app.routes import mines as mines_routes
+from app.routes import tasks as tasks_routes
 from app.services.ton import ton_service
 from app.feed_bot import close_feed_bot
 from app.services.scheduler import scheduler, init_scheduler
@@ -47,6 +48,7 @@ referral_routes.init_routes(db)
 admin_routes.init_routes(db)
 feed_routes.init_routes(db)
 mines_routes.init_routes(db)
+tasks_routes.init_routes(db)
 
 app.include_router(user_routes.router)
 app.include_router(deposit_routes.router)
@@ -55,6 +57,7 @@ app.include_router(referral_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(feed_routes.router)
 app.include_router(mines_routes.router)
+app.include_router(tasks_routes.router)
 
 
 # ── Broadcast endpoint (called from admin route) ───────

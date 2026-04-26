@@ -1026,10 +1026,81 @@ body {
     border-radius: 2px;
 }
 
-/* ── TonConnect button override ───────────────────────── */
+/* ── Tasks ────────────────────────────────────────────── */
 
-tc-root {
-    --tc-font-family: var(--font);
+.tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 4px;
+}
+
+.screen-subtitle {
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+    margin: -4px 0 16px;
+}
+
+.task-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.task-card.task-completed {
+    opacity: 0.6;
+}
+
+.task-info {
+    flex: 1;
+}
+
+.task-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.task-reward {
+    font-size: 13px;
+    color: var(--accent-green);
+    font-weight: 600;
+}
+
+.task-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.task-done {
+    color: var(--accent-green);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+}
+
+.btn-secondary {
+    background: var(--card-light);
+    color: var(--text);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* ── Live Feed ─────────────────────────────────────────── */

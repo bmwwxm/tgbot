@@ -107,6 +107,15 @@ class Database:
                 finished_at REAL DEFAULT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             );
+
+            CREATE TABLE IF NOT EXISTS user_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                task_id TEXT NOT NULL,
+                completed_at REAL NOT NULL,
+                reward REAL NOT NULL DEFAULT 0.0,
+                UNIQUE(user_id, task_id)
+            );
             """
         )
         await self.db.commit()
@@ -500,3 +509,30 @@ class Database:
             (user_id, limit),
         )
         return [dict(r) for r in await cur.fetchall()]
+
+    # ── Tasks ──────────────────────────────────────────────
+
+    async def get_completed_tasks(self, user_id: int) -> list[str]:
+        assert self.db is not None
+        cur = await self.db.execute(
+            "SELECT task_id FROM user_tasks WHERE user_id = ?", (user_id,)
+        )
+        return [r["task_id"] for r in await cur.fetchall()]
+
+    async def complete_task(self, user_id: int, task_id: str, reward: float) -> bool:
+        """Mark task as completed and add reward to balance. Returns False if already done."""
+        assert self.db is not None
+        import time
+        try:
+            await self.db.execute(
+                "INSERT INTO user_tasks (user_id, task_id, completed_at, reward) VALUES (?, ?, ?, ?)",
+                (user_id, task_id, time.time(), reward),
+            )
+        except Exception:
+            return False
+        await self.db.execute(
+            "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+            (reward, user_id),
+        )
+        await self.db.commit()
+        return True

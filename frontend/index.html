@@ -118,6 +118,10 @@
                     <span class="nav-icon">📋</span>
                     <span data-i18n="history">History</span>
                 </button>
+                <button class="nav-btn" onclick="navigate('tasks')">
+                    <span class="nav-icon">✅</span>
+                    <span data-i18n="tasks">Tasks</span>
+                </button>
                 <button class="nav-btn" onclick="navigate('referral')">
                     <span class="nav-icon">🤝</span>
                     <span data-i18n="referrals">Referrals</span>
@@ -339,6 +343,17 @@
                         <p id="mines-server-seed-reveal" style="display:none">Server Seed: <code id="mines-server-seed">-</code></p>
                     </div>
                 </details>
+            </div>
+        </div>
+
+        <!-- Tasks Screen -->
+        <div id="tasks-screen" class="screen">
+            <div class="screen-header">
+                <h2 data-i18n="tasks_title">📋 Tasks</h2>
+            </div>
+            <p class="screen-subtitle" data-i18n="tasks_desc">Complete tasks to earn TON rewards</p>
+            <div id="tasks-list" class="tasks-list">
+                <div class="loader-container"><div class="spinner"></div></div>
             </div>
         </div>
 
