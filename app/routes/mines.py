@@ -213,12 +213,14 @@ async def reveal_cell(req: RevealRequest, user: dict = Depends(get_current_user)
 async def cashout(user: dict = Depends(get_current_user)):
     assert _db is not None
 
-    game = await _db.get_active_mines_game(user["user_id"])
+    game = await _db.claim_mines_cashout(user["user_id"])
     if not game:
         raise HTTPException(status_code=400, detail="No active game")
 
     revealed = json.loads(game["revealed"])
     if not revealed:
+        # Revert status back to active if no cells revealed
+        await _db.update_mines_game(game["id"], status="active")
         raise HTTPException(status_code=400, detail="Reveal at least one cell")
 
     multiplier = game["multiplier"]

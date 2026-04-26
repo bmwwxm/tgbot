@@ -513,6 +513,22 @@ class Database:
                 f"UPDATE mines_games SET {sets} WHERE id = ${len(kwargs)+1}", *vals
             )
 
+    async def claim_mines_cashout(self, user_id: int) -> dict[str, Any] | None:
+        """Atomically claim active game for cashout. Returns game or None if no active game."""
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """UPDATE mines_games SET status = 'cashing_out'
+                   WHERE id = (
+                       SELECT id FROM mines_games
+                       WHERE user_id = $1 AND status = 'active'
+                       ORDER BY id DESC LIMIT 1
+                   ) AND status = 'active'
+                   RETURNING *""",
+                user_id,
+            )
+        return self._row_to_dict(row)
+
     async def get_mines_history(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
         assert self.pool is not None
         async with self.pool.acquire() as conn:
