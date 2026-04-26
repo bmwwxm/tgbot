@@ -23,9 +23,9 @@ TASKS = [
     },
     {
         "id": "join_chat",
-        "chat_id": "@goodmoneychat",
+        "chat_id": "@originaltonchat",
         "reward": 0.01,
-        "link": "https://t.me/goodmoneychat",
+        "link": "https://t.me/originaltonchat",
     },
 ]
 

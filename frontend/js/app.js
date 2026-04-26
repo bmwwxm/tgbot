@@ -412,6 +412,7 @@ async function loadAdminUsers() {
                         <button onclick="toggleBlock(${u.user_id}, ${!u.is_blocked})">${u.is_blocked ? "Unblock" : "Block"}</button>
                         <button onclick="toggleAdmin(${u.user_id}, ${!u.is_admin})">${u.is_admin ? "Remove Admin" : "Make Admin"}</button>
                         <button onclick="promptAdjustBalance(${u.user_id})">Balance</button>
+                        <button onclick="promptAdminDeposit(${u.user_id})">Deposit</button>
                     </div>
                 </div>
                 <div class="admin-user-details">
@@ -452,13 +453,82 @@ async function toggleAdmin(userId, isAdmin) {
 }
 
 function promptAdjustBalance(userId) {
-    const amount = prompt("Enter amount (positive to add, negative to subtract):");
-    if (amount === null) return;
-    const num = parseFloat(amount);
-    if (isNaN(num)) return;
+    // Remove any existing modal
+    const existing = document.getElementById("balance-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "balance-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>${t("adjust_balance") || "Adjust Balance"}</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">User ID: ${userId}</p>
+            <div class="input-group">
+                <label>${t("amount") || "Amount"} (+ / −)</label>
+                <input type="number" id="balance-modal-input" placeholder="10 or -5" step="0.01" autofocus>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="btn btn-primary" onclick="submitAdjustBalance(${userId})">${t("confirm") || "Confirm"}</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('balance-modal').remove()">${t("cancel") || "Cancel"}</button>
+            </div>
+        </div>
+    `;
+    document.getElementById("app").appendChild(modal);
+    document.getElementById("balance-modal-input").focus();
+}
+
+function submitAdjustBalance(userId) {
+    const input = document.getElementById("balance-modal-input");
+    const num = parseFloat(input.value);
+    if (isNaN(num)) { showToast(t("error"), "error"); return; }
     apiCall("/api/admin/balance", "POST", { user_id: userId, amount: num })
-        .then(() => { showToast(t("success"), "success"); loadAdminUsers(); })
+        .then(() => {
+            showToast(t("success"), "success");
+            loadAdminUsers();
+            const modal = document.getElementById("balance-modal");
+            if (modal) modal.remove();
+        })
         .catch(() => showToast(t("error"), "error"));
+}
+
+function promptAdminDeposit(userId) {
+    const existing = document.getElementById("deposit-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "deposit-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>${t("admin_create_deposit") || "Create Deposit"}</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">User ID: ${userId}</p>
+            <div class="input-group">
+                <label>${t("amount") || "Amount"} (TON)</label>
+                <input type="number" id="deposit-modal-input" placeholder="10" min="0.01" step="0.01" autofocus>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="btn btn-primary" onclick="submitAdminDeposit(${userId})">${t("confirm") || "Confirm"}</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('deposit-modal').remove()">${t("cancel") || "Cancel"}</button>
+            </div>
+        </div>
+    `;
+    document.getElementById("app").appendChild(modal);
+    document.getElementById("deposit-modal-input").focus();
+}
+
+function submitAdminDeposit(userId) {
+    const input = document.getElementById("deposit-modal-input");
+    const num = parseFloat(input.value);
+    if (isNaN(num) || num <= 0) { showToast(t("invalid_amount"), "error"); return; }
+    apiCall("/api/admin/deposit", "POST", { user_id: userId, amount: num })
+        .then((res) => {
+            showToast(`${t("success")}! Deposit ${res.amount} TON (+${res.profit.toFixed(2)} TON in ${res.maturity_hours}h)`, "success");
+            loadAdminUsers();
+            const modal = document.getElementById("deposit-modal");
+            if (modal) modal.remove();
+        })
+        .catch((e) => showToast(e.message || t("error"), "error"));
 }
 
 async function loadAdminSettings() {

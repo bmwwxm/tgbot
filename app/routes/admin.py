@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 
@@ -115,6 +117,48 @@ async def adjust_balance(req: BalanceAdjust, admin: dict = Depends(require_admin
         "status": "ok",
         "user_id": req.user_id,
         "new_balance": updated["balance"] if updated else 0,
+    }
+
+
+# ── Admin deposit creation ──────────────────────────────
+
+class AdminDeposit(BaseModel):
+    user_id: int
+    amount: float
+
+
+@router.post("/deposit")
+async def admin_create_deposit(req: AdminDeposit, admin: dict = Depends(require_admin)):
+    """Admin creates a deposit (investment) for a user without deducting balance."""
+    assert _db is not None
+    user = await _db.get_user(req.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    maturity_str = await _db.get_setting("deposit_maturity_seconds")
+    maturity = int(float(maturity_str)) if maturity_str else config.deposit_maturity_seconds
+
+    profit_str = await _db.get_setting("profit_percent")
+    profit_pct = float(profit_str) if profit_str else config.profit_percent
+
+    deposit_id = await _db.add_deposit(
+        user_id=req.user_id,
+        amount=req.amount,
+        tx_hash=f"admin_{admin['user_id']}_{int(time.time())}",
+        maturity_seconds=maturity,
+    )
+
+    expected_profit = req.amount * (profit_pct / 100.0)
+    maturity_h = maturity / 3600
+
+    return {
+        "status": "ok",
+        "deposit_id": deposit_id,
+        "amount": req.amount,
+        "profit": expected_profit,
+        "maturity_hours": maturity_h,
     }
 
 
