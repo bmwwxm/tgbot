@@ -129,12 +129,17 @@ class TonService:
                     )
                 except Exception:
                     comment = ""
-            tx_hash = base64.b64encode(
-                bytes.fromhex(tx.get("transaction_id", {}).get("hash", ""))
-            ).decode() if tx.get("transaction_id", {}).get("hash") else ""
-            if not tx_hash:
-                lt_val = tx.get("transaction_id", {}).get("lt", "")
+            raw_hash = tx.get("transaction_id", {}).get("hash", "")
+            lt_val = tx.get("transaction_id", {}).get("lt", "")
+            if raw_hash:
+                try:
+                    tx_hash = base64.b64decode(raw_hash).hex()
+                except Exception:
+                    tx_hash = raw_hash
+            elif lt_val:
                 tx_hash = f"lt_{lt_val}"
+            else:
+                tx_hash = ""
             incoming.append(
                 {
                     "tx_hash": tx_hash,
