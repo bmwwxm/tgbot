@@ -283,12 +283,9 @@ class Database:
         assert self.pool is not None
         now = time.time()
         async with self.pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE deposits SET status = 'processing' WHERE status = 'pending' AND matures_at <= $1",
-                now,
-            )
             rows = await conn.fetch(
-                "SELECT * FROM deposits WHERE status = 'processing'"
+                "UPDATE deposits SET status = 'processing' WHERE status = 'pending' AND matures_at <= $1 RETURNING *",
+                now,
             )
         return self._rows_to_list(rows)
 
@@ -371,11 +368,8 @@ class Database:
         """Atomically claim pending withdrawals for processing."""
         assert self.pool is not None
         async with self.pool.acquire() as conn:
-            await conn.execute(
-                "UPDATE withdrawals SET status='processing' WHERE status='pending'"
-            )
             rows = await conn.fetch(
-                "SELECT * FROM withdrawals WHERE status='processing' ORDER BY created_at"
+                "UPDATE withdrawals SET status='processing' WHERE status='pending' RETURNING *"
             )
         return self._rows_to_list(rows)
 

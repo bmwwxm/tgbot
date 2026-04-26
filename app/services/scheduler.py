@@ -140,7 +140,11 @@ async def _process_matured_deposits() -> None:
 
 async def _process_withdrawals() -> None:
     assert _db is not None
-    pending = await _db.claim_pending_withdrawals()
+    try:
+        pending = await _db.claim_pending_withdrawals()
+    except Exception as e:
+        logger.error("Failed to claim withdrawals: %s", e)
+        return
     for w in pending:
         wid = w["id"]
         user_id = w["user_id"]
