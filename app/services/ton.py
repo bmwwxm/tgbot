@@ -168,10 +168,7 @@ class TonService:
         nano_amount = to_nano(amount, "ton")
         body = None
         if comment:
-            from tonsdk.utils import create_offchain_uri
-
-            # Build a simple text comment cell
-            from tonsdk.boc import Cell, begin_cell
+            from tonsdk.boc import begin_cell
 
             body = (
                 begin_cell()
