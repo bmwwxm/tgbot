@@ -48,7 +48,7 @@ class TonService:
         return raw
 
     async def _api_call(
-        self, method: str, params: dict[str, Any] | None = None
+        self, method: str, params: dict[str, Any] | None = None, use_post: bool = False,
     ) -> dict[str, Any]:
         assert self._session is not None
         url = f"{config.toncenter_base_url}/{method}"
@@ -57,14 +57,20 @@ class TonService:
             headers["X-API-Key"] = config.toncenter_api_key
         for attempt in range(3):
             try:
-                async with self._session.get(
-                    url, params=params or {}, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
-                ) as resp:
-                    data = await resp.json()
-                    if data.get("ok"):
-                        return data.get("result", {})
-                    logger.warning("API error: %s", data)
-                    return {}
+                if use_post:
+                    async with self._session.post(
+                        url, json=params or {}, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
+                    ) as resp:
+                        data = await resp.json()
+                else:
+                    async with self._session.get(
+                        url, params=params or {}, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
+                    ) as resp:
+                        data = await resp.json()
+                if data.get("ok"):
+                    return data.get("result", {})
+                logger.warning("API error (%s): %s", method, data)
+                return {}
             except Exception as e:
                 logger.warning("API call attempt %d failed: %s", attempt + 1, e)
                 if attempt < 2:
@@ -146,7 +152,8 @@ class TonService:
 
         seqno_result = await self._api_call(
             "runGetMethod",
-            {"address": self._wallet_address, "method": "seqno", "stack": "[]"},
+            {"address": self._wallet_address, "method": "seqno", "stack": []},
+            use_post=True,
         )
         seqno = 0
         if isinstance(seqno_result, dict):
