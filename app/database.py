@@ -422,6 +422,23 @@ class Database:
                 tx_hash, time.time(),
             )
 
+    async def credit_incoming_tx_safe(self, tx_hash: str, user_id: int, amount: float) -> bool:
+        """Atomically mark tx as processed and credit balance. Returns False if already processed."""
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                result = await conn.execute(
+                    "INSERT INTO processed_transactions (tx_hash, processed_at) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    tx_hash, time.time(),
+                )
+                if result.split()[-1] == "0":
+                    return False
+                await conn.execute(
+                    "UPDATE users SET balance = balance + $1, total_deposited = total_deposited + $1 WHERE user_id = $2",
+                    amount, user_id,
+                )
+                return True
+
     # ── Settings ───────────────────────────────────────────
 
     async def get_setting(self, key: str) -> str | None:
@@ -495,6 +512,35 @@ class Database:
             )
         return row["id"] if row else 0
 
+    async def start_mines_game_safe(
+        self, user_id: int, bet: float, mines_count: int,
+        field: str, server_seed: str, client_seed: str, nonce: int,
+    ) -> int | None:
+        """Atomically check no active game, deduct bet, and create game.
+        Returns game_id or None if active game exists or insufficient balance."""
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                existing = await conn.fetchrow(
+                    "SELECT id FROM mines_games WHERE user_id = $1 AND status IN ('active', 'cashing_out') FOR UPDATE",
+                    user_id,
+                )
+                if existing:
+                    return None
+                result = await conn.execute(
+                    "UPDATE users SET balance = balance - $1 WHERE user_id = $2 AND balance >= $1",
+                    bet, user_id,
+                )
+                if result.split()[-1] == "0":
+                    return None
+                row = await conn.fetchrow(
+                    """INSERT INTO mines_games
+                       (user_id, bet, mines_count, field, server_seed, client_seed, nonce, created_at)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id""",
+                    user_id, bet, mines_count, field, server_seed, client_seed, nonce, time.time(),
+                )
+                return row["id"] if row else None
+
     async def get_active_mines_game(self, user_id: int) -> dict[str, Any] | None:
         assert self.pool is not None
         async with self.pool.acquire() as conn:
@@ -512,6 +558,71 @@ class Database:
             await conn.execute(
                 f"UPDATE mines_games SET {sets} WHERE id = ${len(kwargs)+1}", *vals
             )
+
+    async def reveal_mines_cell_safe(self, user_id: int, cell: int) -> dict[str, Any] | str | None:
+        """Atomically reveal a cell in the active mines game using row-level lock.
+        Returns dict with result, 'already_revealed' string, or None if no game."""
+        import json as _json
+
+        GRID = 25
+
+        def _calc_mult(mines_count: int, revealed_count: int) -> float:
+            if revealed_count == 0:
+                return 1.0
+            safe = GRID - mines_count
+            prob = 1.0
+            for i in range(revealed_count):
+                prob *= (safe - i) / (GRID - i)
+            if prob <= 0:
+                return 0.0
+            return round(0.97 / prob, 2)
+
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    "SELECT * FROM mines_games WHERE user_id = $1 AND status = 'active' ORDER BY id DESC LIMIT 1 FOR UPDATE",
+                    user_id,
+                )
+                if not row:
+                    return None
+                game = dict(row)
+                revealed = _json.loads(game["revealed"])
+                if cell in revealed:
+                    return "already_revealed"
+
+                mines = _json.loads(game["field"])
+                revealed.append(cell)
+                hit_mine = cell in mines
+
+                if hit_mine:
+                    await conn.execute(
+                        "UPDATE mines_games SET revealed=$1, status='lost', multiplier=0.0, finished_at=$2 WHERE id=$3",
+                        _json.dumps(revealed), time.time(), game["id"],
+                    )
+                    return {"game": game, "revealed": revealed, "hit_mine": True, "all_safe": False, "multiplier": 0.0}
+
+                new_mult = _calc_mult(game["mines_count"], len(revealed))
+                safe_cells = GRID - game["mines_count"]
+                all_safe = len(revealed) >= safe_cells
+
+                if all_safe:
+                    payout = game["bet"] * new_mult
+                    await conn.execute(
+                        "UPDATE users SET balance = balance + $1 WHERE user_id = $2",
+                        payout, user_id,
+                    )
+                    await conn.execute(
+                        "UPDATE mines_games SET revealed=$1, multiplier=$2, status='won', finished_at=$3 WHERE id=$4",
+                        _json.dumps(revealed), new_mult, time.time(), game["id"],
+                    )
+                    return {"game": game, "revealed": revealed, "hit_mine": False, "all_safe": True, "multiplier": new_mult}
+
+                await conn.execute(
+                    "UPDATE mines_games SET revealed=$1, multiplier=$2 WHERE id=$3",
+                    _json.dumps(revealed), new_mult, game["id"],
+                )
+                return {"game": game, "revealed": revealed, "hit_mine": False, "all_safe": False, "multiplier": new_mult}
 
     async def claim_mines_cashout(self, user_id: int) -> dict[str, Any] | None:
         """Atomically claim active game for cashout. Returns game or None if no active game."""

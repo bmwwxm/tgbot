@@ -48,9 +48,9 @@ async def check_incoming(db: Database) -> list[dict]:
             await db.mark_tx_processed(tx_hash)
             continue
 
-        await db.add_balance(user["user_id"], amount)
-        await db.add_balance_field(user["user_id"], "total_deposited", amount)
-        await db.mark_tx_processed(tx_hash)
+        ok = await db.credit_incoming_tx_safe(tx_hash, user["user_id"], amount)
+        if not ok:
+            continue
 
         credited.append(
             {

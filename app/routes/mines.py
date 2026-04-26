@@ -77,18 +77,10 @@ class StartGameRequest(BaseModel):
 async def start_game(req: StartGameRequest, user: dict = Depends(get_current_user)):
     assert _db is not None
 
-    existing = await _db.get_active_mines_game(user["user_id"])
-    if existing:
-        raise HTTPException(status_code=400, detail="Finish current game first")
-
     if req.bet < MIN_BET:
         raise HTTPException(status_code=400, detail=f"Minimum bet: {MIN_BET} TON")
     if req.mines_count < MIN_MINES or req.mines_count > MAX_MINES:
         raise HTTPException(status_code=400, detail=f"Mines: {MIN_MINES}-{MAX_MINES}")
-
-    deducted = await _db.deduct_balance_safe(user["user_id"], req.bet)
-    if not deducted:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
 
     server_seed = secrets.token_hex(32)
     client_seed = secrets.token_hex(16)
@@ -99,7 +91,7 @@ async def start_game(req: StartGameRequest, user: dict = Depends(get_current_use
 
     server_seed_hash = hashlib.sha256(server_seed.encode()).hexdigest()
 
-    game_id = await _db.create_mines_game(
+    game_id = await _db.start_mines_game_safe(
         user_id=user["user_id"],
         bet=req.bet,
         mines_count=req.mines_count,
@@ -108,6 +100,8 @@ async def start_game(req: StartGameRequest, user: dict = Depends(get_current_use
         client_seed=client_seed,
         nonce=nonce,
     )
+    if not game_id:
+        raise HTTPException(status_code=400, detail="Finish current game first or insufficient balance")
 
     return {
         "game_id": game_id,
@@ -129,28 +123,20 @@ class RevealRequest(BaseModel):
 async def reveal_cell(req: RevealRequest, user: dict = Depends(get_current_user)):
     assert _db is not None
 
-    game = await _db.get_active_mines_game(user["user_id"])
-    if not game:
-        raise HTTPException(status_code=400, detail="No active game")
-
     if req.cell < 0 or req.cell >= GRID_SIZE:
         raise HTTPException(status_code=400, detail="Invalid cell")
 
-    revealed = json.loads(game["revealed"])
-    if req.cell in revealed:
+    result = await _db.reveal_mines_cell_safe(user["user_id"], req.cell)
+    if result is None:
+        raise HTTPException(status_code=400, detail="No active game")
+    if result == "already_revealed":
         raise HTTPException(status_code=400, detail="Cell already revealed")
 
+    game = result["game"]
+    revealed = result["revealed"]
     mines = json.loads(game["field"])
 
-    if req.cell in mines:
-        revealed.append(req.cell)
-        await _db.update_mines_game(
-            game["id"],
-            revealed=json.dumps(revealed),
-            status="lost",
-            multiplier=0.0,
-            finished_at=time.time(),
-        )
+    if result["hit_mine"]:
         return {
             "result": "mine",
             "cell": req.cell,
@@ -162,23 +148,11 @@ async def reveal_cell(req: RevealRequest, user: dict = Depends(get_current_user)
             "server_seed": game["server_seed"],
         }
 
-    revealed.append(req.cell)
-    new_multiplier = _calc_multiplier(game["mines_count"], len(revealed))
+    new_multiplier = result["multiplier"]
 
-    safe_cells = GRID_SIZE - game["mines_count"]
-    all_safe_revealed = len(revealed) >= safe_cells
-
-    if all_safe_revealed:
+    if result["all_safe"]:
         payout = game["bet"] * new_multiplier
         win_profit = payout - game["bet"]
-        await _db.add_balance(user["user_id"], payout)
-        await _db.update_mines_game(
-            game["id"],
-            revealed=json.dumps(revealed),
-            multiplier=new_multiplier,
-            status="won",
-            finished_at=time.time(),
-        )
         if new_multiplier >= MIN_WIN_MULTIPLIER and win_profit > 0:
             await _post_mines_win(user, win_profit, game["mines_count"], new_multiplier)
         return {
@@ -191,12 +165,6 @@ async def reveal_cell(req: RevealRequest, user: dict = Depends(get_current_user)
             "game_over": True,
             "server_seed": game["server_seed"],
         }
-
-    await _db.update_mines_game(
-        game["id"],
-        revealed=json.dumps(revealed),
-        multiplier=new_multiplier,
-    )
 
     return {
         "result": "safe",
