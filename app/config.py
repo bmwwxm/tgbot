@@ -29,7 +29,7 @@ class Config:
     withdrawal_fee: float = 0.01
 
     webapp_url: str = field(default_factory=lambda: os.getenv("WEBAPP_URL", ""))
-    db_path: str = field(default_factory=lambda: os.getenv("DB_PATH", "data/bot.db"))
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
     host: str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
     port: int = 8000
 

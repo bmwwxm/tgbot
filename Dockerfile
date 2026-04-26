@@ -8,8 +8,6 @@ RUN pip install --no-cache-dir .
 COPY app/ app/
 COPY frontend/ frontend/
 
-RUN mkdir -p data
-
 ENV HOST=0.0.0.0
 ENV PORT=8000
 

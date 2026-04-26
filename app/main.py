@@ -39,7 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db = Database(config.db_path)
+db = Database(config.database_url)
 
 user_routes.init_routes(db)
 deposit_routes.init_routes(db, notify_user)
