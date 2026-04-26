@@ -123,6 +123,23 @@ async def register(req: RegisterRequest, x_init_data: str = Header(default="")):
     if user_id in config.admin_ids:
         await _db.update_user(user_id, is_admin=1)
 
+    # Referral milestone bonus: every 10th referral = +1 TON
+    if referrer_id:
+        referrals = await _db.get_referrals(referrer_id)
+        ref_count = len(referrals)
+        if ref_count > 0 and ref_count % 10 == 0:
+            milestone_bonus = 1.0
+            await _db.add_balance(referrer_id, milestone_bonus)
+            await _db.add_balance_field(referrer_id, "referral_earnings", milestone_bonus)
+            try:
+                from app.bot import notify_user
+                await notify_user(
+                    referrer_id, "referral_milestone",
+                    count=ref_count, bonus=milestone_bonus,
+                )
+            except Exception:
+                pass
+
     user = await _db.get_user(user_id)
     return {"status": "created", "user": user}
 

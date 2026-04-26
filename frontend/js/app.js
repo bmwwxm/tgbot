@@ -304,6 +304,15 @@ async function loadReferral() {
         document.getElementById("ref-earnings").textContent = (data.referral_earnings || 0).toFixed(2);
         document.getElementById("referral-link").textContent = data.referral_link;
 
+        // Milestone progress
+        const count = data.referral_count || 0;
+        const nextMilestone = Math.ceil((count + 1) / 10) * 10;
+        const progress = count % 10;
+        const milestoneEl = document.getElementById("milestone-progress");
+        if (milestoneEl) {
+            milestoneEl.textContent = `${progress}/10 → ${nextMilestone}`;
+        }
+
         if (data.referrals && data.referrals.length > 0) {
             document.getElementById("referral-list-section").style.display = "block";
             document.getElementById("referral-list").innerHTML = data.referrals.map(r => `

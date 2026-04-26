@@ -56,6 +56,11 @@ TEXTS = {
             "🤝 <b>Реферальный бонус!</b>\n\n"
             "Вы получили <b>+{amount:.4f} TON</b> от реферала."
         ),
+        "referral_milestone": (
+            "🎉 <b>Акция! {count}-й реферал!</b>\n\n"
+            "Вам начислено <b>+{bonus} TON</b> за каждые 10 рефералов!\n"
+            "Продолжайте приглашать друзей! 🚀"
+        ),
         "balance_topped_up": (
             "💰 <b>Баланс пополнен!</b>\n\n"
             "Зачислено: <b>{amount:.4f} TON</b>\n"
@@ -102,6 +107,11 @@ TEXTS = {
         "referral_bonus": (
             "🤝 <b>Referral bonus!</b>\n\n"
             "You received <b>+{amount:.4f} TON</b> from a referral."
+        ),
+        "referral_milestone": (
+            "🎉 <b>Milestone! {count}th referral!</b>\n\n"
+            "You earned <b>+{bonus} TON</b> for every 10 referrals!\n"
+            "Keep inviting friends! 🚀"
         ),
         "balance_topped_up": (
             "💰 <b>Balance topped up!</b>\n\n"
