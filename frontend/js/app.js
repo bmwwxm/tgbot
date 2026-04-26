@@ -59,12 +59,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function initTonConnect() {
     try {
+        if (typeof TON_CONNECT_UI === "undefined") {
+            console.warn("TON Connect SDK not loaded");
+            return;
+        }
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: window.location.origin + "/tonconnect-manifest.json",
             buttonRootId: "ton-connect-button-container",
         });
     } catch (e) {
         console.warn("TON Connect init error:", e);
+        tonConnectUI = null;
     }
 }
 
