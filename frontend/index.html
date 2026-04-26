@@ -126,6 +126,10 @@
                     <span class="nav-icon">🤝</span>
                     <span data-i18n="referrals">Referrals</span>
                 </button>
+                <button class="nav-btn" onclick="navigate('contest')">
+                    <span class="nav-icon">🎥</span>
+                    <span data-i18n="contest">Contest</span>
+                </button>
                 <button class="nav-btn" id="admin-nav-btn" style="display:none" onclick="navigate('admin')">
                     <span class="nav-icon">⚙️</span>
                     <span>Admin</span>
@@ -367,6 +371,63 @@
             </div>
         </div>
 
+        <!-- Contest Screen -->
+        <div id="contest-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="contest_title">🎥 Video Contest</h2>
+            </div>
+
+            <div class="contest-rules-card">
+                <h3 data-i18n="contest_rules_title">📋 Rules</h3>
+                <div class="contest-rules-list">
+                    <div class="contest-rule">
+                        <span class="rule-num">1</span>
+                        <span data-i18n="contest_rule_1">Record a video of you playing Mines in GoodMoney</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">2</span>
+                        <span data-i18n="contest_rule_2">Upload to TikTok, Instagram Reels or YouTube Shorts</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">3</span>
+                        <span data-i18n="contest_rule_3">Add bot link in video description or comments: t.me/originalton_bot</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">4</span>
+                        <span data-i18n="contest_rule_4">Submit the video link below</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">5</span>
+                        <span data-i18n="contest_rule_5">Get 0.1 TON for every 100 views!</span>
+                    </div>
+                </div>
+                <div class="contest-reward-badge">
+                    <span>💰</span>
+                    <span data-i18n="contest_reward">100 views = 0.1 TON</span>
+                </div>
+            </div>
+
+            <div class="contest-submit-card">
+                <h3 data-i18n="contest_submit_title">📤 Submit Video</h3>
+                <div class="input-group">
+                    <label data-i18n="contest_url_label">Video URL (TikTok / Instagram / YouTube)</label>
+                    <input type="url" id="contest-url" placeholder="https://www.tiktok.com/@user/video/...">
+                </div>
+                <button class="btn btn-primary" onclick="submitContest()">
+                    <span>🚀</span> <span data-i18n="contest_submit_btn">Submit</span>
+                </button>
+                <div id="contest-submit-result"></div>
+            </div>
+
+            <div class="contest-my-submissions">
+                <h3 data-i18n="contest_my_videos">📹 My Videos</h3>
+                <div id="contest-list">
+                    <p style="color:var(--text-secondary);text-align:center" data-i18n="contest_no_videos">No videos submitted yet</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Admin Screen -->
         <div id="admin-screen" class="screen">
             <div class="screen-header">
@@ -379,6 +440,7 @@
                 <button class="admin-tab" onclick="switchAdminTab('users')">👥</button>
                 <button class="admin-tab" onclick="switchAdminTab('withdrawals')">💸</button>
                 <button class="admin-tab" onclick="switchAdminTab('deposits')">💎</button>
+                <button class="admin-tab" onclick="switchAdminTab('contest')">🎥</button>
                 <button class="admin-tab" onclick="switchAdminTab('settings')">⚙️</button>
                 <button class="admin-tab" onclick="switchAdminTab('broadcast')">📢</button>
                 <button class="admin-tab" onclick="switchAdminTab('fakefeed')">📡</button>
@@ -445,6 +507,17 @@
                     <button class="admin-filter" onclick="loadAdminDeposits('all', this)">All</button>
                 </div>
                 <div id="admin-dep-list"></div>
+            </div>
+
+            <!-- Contest Admin -->
+            <div id="admin-contest" class="admin-panel">
+                <div class="admin-filter-row">
+                    <button class="admin-filter active" onclick="loadAdminContest('pending', this)">Pending</button>
+                    <button class="admin-filter" onclick="loadAdminContest('approved', this)">Approved</button>
+                    <button class="admin-filter" onclick="loadAdminContest('rejected', this)">Rejected</button>
+                    <button class="admin-filter" onclick="loadAdminContest('all', this)">All</button>
+                </div>
+                <div id="admin-contest-list"></div>
             </div>
 
             <!-- Settings -->

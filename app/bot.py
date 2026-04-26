@@ -61,6 +61,12 @@ TEXTS = {
             "Вам начислено <b>+{bonus} TON</b> за каждые 10 рефералов!\n"
             "Продолжайте приглашать друзей! 🚀"
         ),
+        "contest_payout": (
+            "🎥 <b>Награда за видео!</b>\n\n"
+            "Просмотры: <b>{views}</b>\n"
+            "Начислено: <b>+{reward} TON</b>\n"
+            "Продолжайте снимать видео! 🚀"
+        ),
         "balance_topped_up": (
             "💰 <b>Баланс пополнен!</b>\n\n"
             "Зачислено: <b>{amount:.4f} TON</b>\n"
@@ -112,6 +118,12 @@ TEXTS = {
             "🎉 <b>Milestone! {count}th referral!</b>\n\n"
             "You earned <b>+{bonus} TON</b> for every 10 referrals!\n"
             "Keep inviting friends! 🚀"
+        ),
+        "contest_payout": (
+            "🎥 <b>Video reward!</b>\n\n"
+            "Views: <b>{views}</b>\n"
+            "Earned: <b>+{reward} TON</b>\n"
+            "Keep making videos! 🚀"
         ),
         "balance_topped_up": (
             "💰 <b>Balance topped up!</b>\n\n"

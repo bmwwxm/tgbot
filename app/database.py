@@ -122,6 +122,22 @@ class Database:
                 reward DOUBLE PRECISION NOT NULL DEFAULT 0.0,
                 UNIQUE(user_id, task_id)
             )""")
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS contest_submissions (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                platform TEXT NOT NULL,
+                video_url TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                views_count INTEGER NOT NULL DEFAULT 0,
+                last_views INTEGER NOT NULL DEFAULT 0,
+                total_paid DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                has_link BOOLEAN NOT NULL DEFAULT FALSE,
+                admin_note TEXT NOT NULL DEFAULT '',
+                created_at DOUBLE PRECISION NOT NULL,
+                updated_at DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                UNIQUE(user_id, video_url)
+            )""")
 
     def _row_to_dict(self, row: asyncpg.Record | None) -> dict[str, Any] | None:
         return dict(row) if row else None
@@ -485,7 +501,7 @@ class Database:
         assert self.pool is not None
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM task_completions WHERE user_id = $1 ORDER BY completed_at DESC",
+                "SELECT * FROM user_tasks WHERE user_id = $1 ORDER BY completed_at DESC",
                 user_id,
             )
         return self._rows_to_list(rows)
@@ -763,3 +779,89 @@ class Database:
             return True
         except asyncpg.UniqueViolationError:
             return False
+
+    # ── Contest ────────────────────────────────────────────
+
+    async def add_contest_submission(
+        self, user_id: int, platform: str, video_url: str,
+    ) -> int | None:
+        assert self.pool is not None
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """INSERT INTO contest_submissions
+                       (user_id, platform, video_url, created_at, updated_at)
+                       VALUES ($1, $2, $3, $4, $4) RETURNING id""",
+                    user_id, platform, video_url, time.time(),
+                )
+            return row["id"] if row else None
+        except asyncpg.UniqueViolationError:
+            return None
+
+    async def get_user_submissions(self, user_id: int) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM contest_submissions WHERE user_id = $1 ORDER BY created_at DESC",
+                user_id,
+            )
+        return self._rows_to_list(rows)
+
+    async def get_all_contest_submissions(
+        self, status: str = "all", limit: int = 50, offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            if status == "all":
+                rows = await conn.fetch(
+                    """SELECT cs.*, u.username, u.first_name
+                       FROM contest_submissions cs
+                       LEFT JOIN users u ON cs.user_id = u.user_id
+                       ORDER BY cs.created_at DESC LIMIT $1 OFFSET $2""",
+                    limit, offset,
+                )
+            else:
+                rows = await conn.fetch(
+                    """SELECT cs.*, u.username, u.first_name
+                       FROM contest_submissions cs
+                       LEFT JOIN users u ON cs.user_id = u.user_id
+                       WHERE cs.status = $1
+                       ORDER BY cs.created_at DESC LIMIT $2 OFFSET $3""",
+                    status, limit, offset,
+                )
+        return self._rows_to_list(rows)
+
+    async def update_contest_submission(
+        self, submission_id: int, **kwargs: Any,
+    ) -> dict[str, Any] | None:
+        assert self.pool is not None
+        sets = []
+        vals: list[Any] = []
+        i = 1
+        for k, v in kwargs.items():
+            sets.append(f"{k} = ${i}")
+            vals.append(v)
+            i += 1
+        vals.append(time.time())
+        sets.append(f"updated_at = ${i}")
+        i += 1
+        vals.append(submission_id)
+        query = f"UPDATE contest_submissions SET {', '.join(sets)} WHERE id = ${i} RETURNING *"
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(query, *vals)
+        return self._row_to_dict(row)
+
+    async def contest_payout(self, submission_id: int, user_id: int, amount: float, new_views: int) -> bool:
+        """Atomically pay contest reward and update submission."""
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "UPDATE contest_submissions SET views_count = $1, total_paid = total_paid + $2, last_views = $1, updated_at = $3 WHERE id = $4",
+                    new_views, amount, time.time(), submission_id,
+                )
+                await conn.execute(
+                    "UPDATE users SET balance = balance + $1 WHERE user_id = $2",
+                    amount, user_id,
+                )
+        return True

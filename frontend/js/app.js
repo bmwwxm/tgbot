@@ -64,7 +64,7 @@ function navigate(screen) {
     }
 
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-    const navMap = { dashboard: 0, history: 1, tasks: 2, referral: 3, admin: 4 };
+    const navMap = { dashboard: 0, history: 1, tasks: 2, referral: 3, contest: 4, admin: 5 };
     const navBtns = document.querySelectorAll(".nav-btn");
     if (navMap[screen] !== undefined && navBtns[navMap[screen]]) {
         navBtns[navMap[screen]].classList.add("active");
@@ -78,6 +78,7 @@ function navigate(screen) {
     if (screen === "tasks") loadTasks();
     if (screen === "admin") loadAdmin();
     if (screen === "mines") loadMines();
+    if (screen === "contest") loadContest();
 }
 
 function showScreen(name) {
@@ -594,6 +595,7 @@ function switchAdminTab(tab) {
     if (tab === "settings") loadAdminSettings();
     if (tab === "withdrawals") loadAdminWithdrawals("pending");
     if (tab === "deposits") loadAdminDeposits("active");
+    if (tab === "contest") loadAdminContest("pending");
     if (tab === "fakefeed") updateFakeStatus();
 }
 
@@ -857,6 +859,137 @@ function renderAdminUserList(users) {
             </div>
         </div>
     `).join("");
+}
+
+// ── Admin Contest ─────────────────────────────────────
+
+async function loadAdminContest(status, btn) {
+    if (btn) {
+        document.querySelectorAll("#admin-contest .admin-filter").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+    }
+    try {
+        const data = await apiCall(`/api/contest/admin/list?status=${status}`);
+        const list = document.getElementById("admin-contest-list");
+        if (!data.submissions.length) {
+            list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">Нет заявок</p>';
+            return;
+        }
+        list.innerHTML = data.submissions.map(s => {
+            const date = new Date(s.created_at * 1000).toLocaleString();
+            const name = s.first_name || s.username || "ID:" + s.user_id;
+            const platformIcon = s.platform === "tiktok" ? "📱" : s.platform === "instagram" ? "📸" : "▶️";
+            let actions = "";
+            if (s.status === "pending") {
+                actions = `
+                    <div style="display:flex;gap:6px;margin-top:8px">
+                        <button class="btn btn-small" style="background:var(--success);color:#fff" onclick="event.stopPropagation();reviewContest(${s.id}, 'approved', true)">✅ Approve (link ok)</button>
+                        <button class="btn btn-small" style="background:#ff9800;color:#fff" onclick="event.stopPropagation();reviewContest(${s.id}, 'approved', false)">⚠️ Approve (no link)</button>
+                        <button class="btn btn-small" style="background:var(--error);color:#fff" onclick="event.stopPropagation();reviewContest(${s.id}, 'rejected', false)">❌ Reject</button>
+                    </div>
+                `;
+            } else if (s.status === "approved" && s.has_link) {
+                actions = `
+                    <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+                        <input type="number" id="views-${s.id}" placeholder="Views count" style="width:120px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:12px" value="${s.views_count || 0}">
+                        <button class="btn btn-small" style="background:var(--accent);color:#fff" onclick="event.stopPropagation();payoutContest(${s.id})">💰 Payout</button>
+                    </div>
+                `;
+            }
+            return `
+                <div class="admin-list-item" onclick="openUserDetail(${s.user_id})">
+                    <div class="admin-list-main">
+                        <span class="admin-list-name">${name} ${platformIcon}</span>
+                        <span class="contest-status ${s.status}">${s.status}</span>
+                    </div>
+                    <a href="${s.video_url}" target="_blank" style="color:var(--accent-light);font-size:11px;word-break:break-all" onclick="event.stopPropagation()">${s.video_url}</a>
+                    <div class="admin-list-sub" style="margin-top:4px">
+                        <span>📅 ${date}</span>
+                        <span>👁 ${s.views_count} views</span>
+                        <span>💰 ${(s.total_paid||0).toFixed(2)} TON paid</span>
+                        <span>${s.has_link ? "🔗 Link ✓" : "🔗 No link"}</span>
+                    </div>
+                    ${actions}
+                </div>
+            `;
+        }).join("");
+    } catch (e) {}
+}
+
+async function reviewContest(id, status, hasLink) {
+    try {
+        await apiCall("/api/contest/admin/review", "POST", {
+            submission_id: id, status: status, has_link: hasLink,
+        });
+        showToast(status === "approved" ? "Одобрено!" : "Отклонено", status === "approved" ? "success" : "error");
+        loadAdminContest(document.querySelector("#admin-contest .admin-filter.active")?.textContent.toLowerCase() || "pending");
+    } catch (e) {
+        showToast(e.message || "Error", "error");
+    }
+}
+
+async function payoutContest(id) {
+    const viewsInput = document.getElementById("views-" + id);
+    const views = parseInt(viewsInput?.value);
+    if (!views || views < 0) { showToast("Введите кол-во просмотров", "error"); return; }
+    try {
+        const result = await apiCall("/api/contest/admin/payout", "POST", {
+            submission_id: id, views_count: views,
+        });
+        showToast(`Выплачено: ${result.reward} TON (${result.added_views} новых просм.)`, "success");
+        loadAdminContest(document.querySelector("#admin-contest .admin-filter.active")?.textContent.toLowerCase() || "approved");
+    } catch (e) {
+        showToast(e.message || "Error", "error");
+    }
+}
+
+// ── Contest ───────────────────────────────────────────
+
+async function loadContest() {
+    try {
+        const data = await apiCall("/api/contest/my");
+        const list = document.getElementById("contest-list");
+        if (data.submissions && data.submissions.length > 0) {
+            list.innerHTML = data.submissions.map(s => {
+                const date = new Date(s.created_at * 1000).toLocaleDateString();
+                const platformIcon = s.platform === "tiktok" ? "📱" : s.platform === "instagram" ? "📸" : "▶️";
+                const statusClass = s.status === "approved" ? "approved" : s.status === "rejected" ? "rejected" : "pending";
+                const statusText = s.status === "approved" ? (currentLang === "ru" ? "Одобрено" : "Approved")
+                    : s.status === "rejected" ? (currentLang === "ru" ? "Отклонено" : "Rejected")
+                    : (currentLang === "ru" ? "На проверке" : "Pending");
+                return `
+                    <div class="contest-item">
+                        <div class="contest-item-header">
+                            <span>${platformIcon} ${s.platform}</span>
+                            <span class="contest-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <a href="${s.video_url}" target="_blank" class="contest-link">${s.video_url.substring(0, 50)}...</a>
+                        <div class="contest-item-stats">
+                            <span>👁 ${s.views_count} ${currentLang === "ru" ? "просм." : "views"}</span>
+                            <span>💰 ${(s.total_paid || 0).toFixed(2)} TON</span>
+                            <span>📅 ${date}</span>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+        } else {
+            list.innerHTML = `<p style="color:var(--text-secondary);text-align:center">${t("contest_no_videos")}</p>`;
+        }
+    } catch (e) {}
+}
+
+async function submitContest() {
+    const url = document.getElementById("contest-url").value.trim();
+    if (!url) { showToast(t("error"), "error"); return; }
+    const result = document.getElementById("contest-submit-result");
+    try {
+        const data = await apiCall("/api/contest/submit", "POST", { video_url: url });
+        result.innerHTML = `<p style="color:var(--success);margin-top:8px">${data.message}</p>`;
+        document.getElementById("contest-url").value = "";
+        loadContest();
+    } catch (e) {
+        result.innerHTML = `<p style="color:var(--error);margin-top:8px">${e.message || t("error")}</p>`;
+    }
 }
 
 // ── Utils ─────────────────────────────────────────────
