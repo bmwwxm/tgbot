@@ -185,13 +185,32 @@ class TonService:
         )
         boc = bytes_to_b64str(query["message"].to_boc(False))
 
-        result = await self._send_boc(boc)
-        if result:
-            logger.info("Sent %.4f TON to %s", amount, to_address)
-            return result
-        raise RuntimeError(f"Failed to send {amount} TON to {to_address}")
+        ok = await self._send_boc(boc)
+        if not ok:
+            raise RuntimeError(f"Failed to send {amount} TON to {to_address}")
 
-    async def _send_boc(self, boc: str) -> str:
+        logger.info("Sent %.4f TON to %s", amount, to_address)
+
+        # Wait and fetch tx hash from blockchain
+        await asyncio.sleep(5)
+        tx_hash = await self._get_latest_tx_hash()
+        return tx_hash or "sent"
+
+    async def _get_latest_tx_hash(self) -> str:
+        """Get hex hash of the latest outgoing transaction for tonviewer link."""
+        txs = await self.get_transactions(limit=3)
+        for tx in txs:
+            out_msgs = tx.get("out_msgs", [])
+            if out_msgs:
+                raw_hash = tx.get("transaction_id", {}).get("hash", "")
+                if raw_hash:
+                    try:
+                        return base64.b64decode(raw_hash).hex()
+                    except Exception:
+                        return raw_hash
+        return ""
+
+    async def _send_boc(self, boc: str) -> bool:
         assert self._session is not None
         url = f"{config.toncenter_base_url}/sendBoc"
         headers: dict[str, str] = {}
@@ -206,11 +225,11 @@ class TonService:
             ) as resp:
                 data = await resp.json()
                 if data.get("ok"):
-                    return data.get("result", {}).get("hash", "sent")
+                    return True
                 logger.error("sendBoc error: %s", data)
         except Exception as e:
             logger.error("sendBoc exception: %s", e)
-        return ""
+        return False
 
 
 ton_service = TonService()

@@ -46,7 +46,7 @@ TEXTS = {
         "withdrawal_sent": (
             "💸 <b>Вывод отправлен!</b>\n\n"
             "Сумма: <b>{amount:.4f} TON</b>\n"
-            "TX: <code>{tx_hash}</code>"
+            "<a href=\"https://tonviewer.com/transaction/{tx_hash}\">Посмотреть на Tonviewer</a>"
         ),
         "withdrawal_failed": (
             "❌ <b>Ошибка вывода</b>\n\n"
@@ -93,7 +93,7 @@ TEXTS = {
         "withdrawal_sent": (
             "💸 <b>Withdrawal sent!</b>\n\n"
             "Amount: <b>{amount:.4f} TON</b>\n"
-            "TX: <code>{tx_hash}</code>"
+            "<a href=\"https://tonviewer.com/transaction/{tx_hash}\">View on Tonviewer</a>"
         ),
         "withdrawal_failed": (
             "❌ <b>Withdrawal failed</b>\n\n"

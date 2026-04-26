@@ -268,11 +268,14 @@ async function loadHistory() {
         if (wdData.withdrawals && wdData.withdrawals.length > 0) {
             wdList.innerHTML = wdData.withdrawals.map(w => {
                 const date = new Date(w.created_at * 1000).toLocaleDateString();
+                const txLink = w.tx_hash && w.tx_hash !== "sent" && w.tx_hash !== ""
+                    ? `<a href="https://tonviewer.com/transaction/${encodeURIComponent(w.tx_hash)}" target="_blank" class="tx-link">Tonviewer ↗</a>`
+                    : "";
                 return `
                     <div class="history-item">
                         <div class="history-item-left">
                             <span class="history-amount">${w.amount.toFixed(4)} TON</span>
-                            <span class="history-date">${date}</span>
+                            <span class="history-date">${date} ${txLink}</span>
                         </div>
                         <span class="history-status ${w.status}">${t(w.status)}</span>
                     </div>
