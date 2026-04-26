@@ -2,7 +2,6 @@
 
 let user = null;
 let settings = {};
-let tonConnectUI = null;
 let adminPage = 0;
 let minesGame = null;
 let feedTimer = null;
@@ -48,187 +47,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("Registration error", e);
     }
 
-    initTonConnect();
     updateUI();
     showScreen("dashboard");
 
     setInterval(refreshData, 30000);
 });
 
-// ── TON Connect ───────────────────────────────────────
-
-function initTonConnect() {
-    try {
-        if (typeof TON_CONNECT_UI === "undefined") {
-            console.warn("TON Connect SDK not loaded");
-            return;
-        }
-        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + "/tonconnect-manifest.json",
-            buttonRootId: "ton-connect-button-container",
-        });
-    } catch (e) {
-        console.warn("TON Connect init error:", e);
-        tonConnectUI = null;
-    }
-}
-
-async function sendViaTonConnect() {
-    if (!tonConnectUI) {
-        showToast(t("error"), "error");
-        return;
-    }
-
-    const connected = tonConnectUI.connected;
-    if (!connected) {
-        showToast(t("connect_wallet"), "error");
-        return;
-    }
-
-    const amountInput = document.getElementById("tc-amount");
-    const amount = parseFloat(amountInput.value);
-    if (!amount || amount < settings.min_deposit) {
-        showToast(t("deposit_min_error", { min: settings.min_deposit }), "error");
-        return;
-    }
-
-    let depositInfo;
-    try {
-        depositInfo = await apiCall("/api/deposit/info");
-    } catch (e) {
-        showToast(t("error"), "error");
-        return;
-    }
-
-    const nanoAmount = BigInt(Math.floor(amount * 1e9)).toString();
-    const comment = depositInfo.deposit_comment;
-
-    try {
-        const tx = {
-            validUntil: Math.floor(Date.now() / 1000) + 600,
-            messages: [
-                {
-                    address: depositInfo.wallet_address,
-                    amount: nanoAmount,
-                    payload: buildCommentPayload(comment),
-                },
-            ],
-        };
-        await tonConnectUI.sendTransaction(tx);
-        showToast(t("success") + "! " + t("deposit") + " " + amount + " TON", "success");
-        amountInput.value = "";
-    } catch (e) {
-        console.error("TX error:", e);
-        if (e.message && !e.message.includes("cancel")) {
-            showToast(t("error") + ": " + e.message, "error");
-        }
-    }
-}
-
-function buildCommentPayload(text) {
-    // Build comment cell as base64 BOC
-    // 0x00000000 prefix + UTF-8 text
-    const encoder = new TextEncoder();
-    const textBytes = encoder.encode(text);
-    const payload = new Uint8Array(4 + textBytes.length);
-    // First 4 bytes are 0 (text comment op code)
-    payload.set(textBytes, 4);
-
-    // Simple BOC encoding for a single cell
-    const bits = payload.length * 8;
-    const refs = 0;
-    const d1 = refs + (0) + (Math.ceil(bits / 8) % 2 === 1 ? 1 : 0) * 8;
-    const d2 = Math.ceil(bits / 8);
-
-    // Use a minimal BOC
-    // For simplicity, encode as base64 hex string for TON Connect
-    let hex = "";
-    payload.forEach(b => hex += b.toString(16).padStart(2, "0"));
-
-    // Actually, TON Connect accepts base64 BOC.
-    // Let's use a simpler approach: return the comment as base64 of the cell BOC
-    return btoa(String.fromCharCode(...createCommentBoc(text)));
-}
-
-function createCommentBoc(text) {
-    const encoder = new TextEncoder();
-    const textBytes = encoder.encode(text);
-    const data = new Uint8Array(4 + textBytes.length);
-    data.set(textBytes, 4);
-
-    const dataLen = data.length;
-    const d1 = (dataLen * 2 + (dataLen * 8 % 8 !== 0 ? 1 : 0)) & 0xFF;
-    const d2 = dataLen;
-
-    // Minimal single-cell BOC
-    const cellData = new Uint8Array(2 + dataLen);
-    cellData[0] = 0; // d1: 0 refs, not exotic, complete
-    cellData[1] = dataLen * 2; // d2: data bit length / 4 rounded
-    cellData.set(data, 2);
-
-    // BOC magic + header
-    const magic = [0xb5, 0xee, 0x9c, 0x72];
-    const flags = 0;
-    const sizeBits = 1;
-    const cells = 1;
-    const roots = 1;
-    const absent = 0;
-    const totCellSize = cellData.length;
-
-    const boc = new Uint8Array(4 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + cellData.length);
-    let pos = 0;
-    magic.forEach(b => boc[pos++] = b);
-    boc[pos++] = (flags << 3) | sizeBits; // has_idx=0, has_crc32c=0, has_cache_bits=0, size=1
-    boc[pos++] = 0; // off_bytes (placeholder, 1 byte)
-    // Actually, let's use the standard approach
-
-    // Simplified: just return hex-encoded comment for payload
-    // TON Connect v2 accepts base64-encoded BOC cells
-    return buildSimpleBoc(data);
-}
-
-function buildSimpleBoc(data) {
-    // Build a minimal BOC with one cell containing the data
-    const dataBits = data.length * 8;
-    const d1 = Math.ceil(dataBits / 8) * 2;
-    const d2 = 0; // no refs
-
-    const cellBytes = new Uint8Array(2 + data.length);
-    cellBytes[0] = d2; // refs_descriptor
-    cellBytes[1] = d1; // bits_descriptor
-    cellBytes.set(data, 2);
-
-    // BOC serialization (reach_boc_magic_prefix)
-    const bocMagic = [0xb5, 0xee, 0x9c, 0x72];
-    const hasIdx = 0;
-    const hasCrc = 0;
-    const hasCacheBits = 0;
-    const flags = 0;
-    const sizeBytes = 1;
-    const firstByte = (hasIdx * 128) | (hasCrc * 64) | (hasCacheBits * 32) | (flags * 8) | sizeBytes;
-
-    const cellCount = 1;
-    const rootCount = 1;
-    const absentCount = 0;
-    const totalCellsSize = cellBytes.length;
-
-    const header = new Uint8Array([
-        ...bocMagic,
-        firstByte,
-        1, // offset bytes
-        0, cellCount,  // cells (in sizeBytes)
-        0, rootCount,
-        0, absentCount,
-        totalCellsSize, // total cells size (1 byte offset)
-        0, // root index
-    ]);
-
-    // Simplified: merge
-    const result = new Uint8Array(header.length + cellBytes.length);
-    result.set(header);
-    result.set(cellBytes, header.length);
-    return result;
-}
 
 // ── Navigation ────────────────────────────────────────
 
@@ -348,13 +172,6 @@ async function createInvestment() {
     } catch (e) {
         showToast(e.message || t("error"), "error");
     }
-}
-
-function switchDepositMethod(method) {
-    document.querySelectorAll(".method-tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".method-content").forEach(c => c.classList.remove("active"));
-    event.target.classList.add("active");
-    document.getElementById(method + "-method").classList.add("active");
 }
 
 // ── Withdraw ──────────────────────────────────────────
