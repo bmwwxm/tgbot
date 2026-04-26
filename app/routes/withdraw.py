@@ -37,8 +37,16 @@ async def create_withdrawal(
             status_code=400,
             detail=f"Minimum withdrawal: {min_withdrawal} TON",
         )
-    if not req.to_address or len(req.to_address) < 20:
-        raise HTTPException(status_code=400, detail="Invalid TON address")
+    addr = req.to_address.strip()
+    is_valid_ton = (
+        len(addr) == 48
+        and (addr.startswith("EQ") or addr.startswith("UQ")
+             or addr.startswith("kQ") or addr.startswith("0Q"))
+    ) or (
+        len(addr) == 66 and addr.startswith("0:")
+    )
+    if not addr or not is_valid_ton:
+        raise HTTPException(status_code=400, detail="Invalid TON address. Must start with EQ or UQ.")
 
     recent = await _db.count_recent_withdrawals(user["user_id"], seconds=60)
     if recent >= 3:
