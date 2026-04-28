@@ -482,11 +482,15 @@
                 <div class="pvp-lobby-status" id="pvp-lobby-status">
                     <span data-i18n="pvp_waiting">Waiting for players...</span>
                 </div>
+                <div class="pvp-arena" id="pvp-arena" style="display:none">
+                    <canvas id="pvp-canvas" width="340" height="340"></canvas>
+                </div>
                 <div class="pvp-players-list" id="pvp-players-list"></div>
                 <div class="pvp-slots-info">
                     <span id="pvp-slots-filled">0</span>/<span id="pvp-slots-total">0</span> <span data-i18n="pvp_players">players</span>
                 </div>
                 <div id="pvp-battle-result" class="pvp-battle-result" style="display:none"></div>
+                <div id="pvp-confetti-container" class="pvp-confetti-container"></div>
                 <button class="btn btn-primary btn-large" id="pvp-back-btn" onclick="pvpBackToMain()" style="margin-top:12px">
                     ← <span data-i18n="back">Back</span>
                 </button>

@@ -293,8 +293,17 @@ async def _resolve_lobby(lobby_id: int):
     )
 
     # Post to feed if big win
-    if prize >= 0.5:
+    if prize >= 0.5 and winner["user_id"] > 0:
         name = winner.get("first_name") or winner.get("display_name") or "Player"
+        username = winner.get("username") or name
+        try:
+            await post_to_feed(
+                "pvp_win",
+                username=username,
+                profit=prize - lobby["bet"],
+            )
+        except Exception:
+            pass
         try:
             display = name if len(name) <= 5 else name[:3] + "***" + name[-2:]
             await _db.add_feed_entry(

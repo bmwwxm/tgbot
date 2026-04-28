@@ -1686,6 +1686,8 @@ async function showPvpLobby(lobbyId) {
     pvpPolling = setInterval(() => refreshPvpLobby(lobbyId), 2000);
 }
 
+let pvpBattlePlayed = {};
+
 async function refreshPvpLobby(lobbyId) {
     try {
         const data = await apiCall("/api/pvp/lobby/" + lobbyId);
@@ -1697,6 +1699,7 @@ async function refreshPvpLobby(lobbyId) {
         const playersList = document.getElementById("pvp-players-list");
 
         if (data.status === "waiting") {
+            document.getElementById("pvp-arena").style.display = "none";
             statusEl.innerHTML = '<span class="pvp-waiting-anim">⏳</span> ' + t("pvp_waiting");
             playersList.innerHTML = data.players.map(p => `
                 <div class="pvp-player-row">
@@ -1707,42 +1710,307 @@ async function refreshPvpLobby(lobbyId) {
         } else if (data.status === "finished") {
             if (pvpPolling) { clearInterval(pvpPolling); pvpPolling = null; }
 
-            statusEl.innerHTML = '🏆 ' + t("pvp_finished");
-            playersList.innerHTML = data.players.map(p => {
-                const isWinner = p.user_id === data.winner_id;
-                const cls = isWinner ? "winner" : "loser";
-                const rollCls = (p.roll || 0) >= 50 ? "high" : "low";
-                return `
-                    <div class="pvp-player-row ${cls}">
-                        <span class="pvp-player-name">${isWinner ? "👑" : "👤"} ${p.name}</span>
-                        <span class="pvp-player-roll ${rollCls}">${(p.roll || 0).toFixed(2)}</span>
-                    </div>
-                `;
-            }).join("");
-
-            const resultEl = document.getElementById("pvp-battle-result");
-            resultEl.style.display = "";
-            const isMyWin = data.winner_id === user.user_id;
-            const pot = data.bet * data.players.length;
-            const prize = pot * (1 - data.commission);
-            if (isMyWin) {
-                resultEl.className = "pvp-battle-result win";
-                resultEl.innerHTML = `🎉 ${t("you_won")} +${(prize - data.bet).toFixed(4)} TON`;
+            if (!pvpBattlePlayed[lobbyId]) {
+                pvpBattlePlayed[lobbyId] = true;
+                await playPvpBattleAnimation(data);
             } else {
-                resultEl.className = "pvp-battle-result lose";
-                resultEl.innerHTML = `💔 ${t("you_lost")} -${data.bet.toFixed(4)} TON`;
+                showPvpFinalState(data);
             }
-
-            try { user = await apiCall("/api/user/me"); } catch(e) {}
-            document.getElementById("pvp-balance").textContent = (user.balance || 0).toFixed(4);
         }
     } catch(e) {
         console.warn("PvP poll error", e);
     }
 }
 
+async function playPvpBattleAnimation(data) {
+    const statusEl = document.getElementById("pvp-lobby-status");
+    const playersList = document.getElementById("pvp-players-list");
+    const arena = document.getElementById("pvp-arena");
+    const canvas = document.getElementById("pvp-canvas");
+
+    arena.style.display = "";
+    canvas.width = canvas.offsetWidth * 2;
+    canvas.height = 680;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width;
+    const H = canvas.height;
+
+    const players = data.players;
+    const colors = ["#00d2ff","#ff6b35","#7c4dff","#4caf50","#f44336","#ffc107","#e91e63","#00bcd4","#ff9800","#9c27b0"];
+    const winnerIdx = players.findIndex(p => p.user_id === data.winner_id);
+
+    // Phase 1: Spinning wheel (3.5s)
+    statusEl.innerHTML = '⚡ <b>' + t("pvp_battle_rolling") + '</b>';
+    playersList.innerHTML = players.map((p,i) => `
+        <div class="pvp-player-row" id="pvp-row-${i}">
+            <span class="pvp-player-name"><span style="color:${colors[i%colors.length]}">●</span> ${p.name}</span>
+            <span class="pvp-player-roll" style="opacity:0.3">...</span>
+        </div>
+    `).join("");
+
+    const segAngle = (Math.PI * 2) / players.length;
+    let spinAngle = 0;
+    const targetAngle = Math.PI * 2 * 8 + (Math.PI * 2 - winnerIdx * segAngle - segAngle / 2);
+    const spinDuration = 3500;
+    const spinStart = Date.now();
+
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+    await new Promise(resolve => {
+        function drawWheel() {
+            const elapsed = Date.now() - spinStart;
+            const progress = Math.min(elapsed / spinDuration, 1);
+            spinAngle = targetAngle * easeOutCubic(progress);
+
+            ctx.clearRect(0, 0, W, H);
+            const cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.38;
+
+            // Outer glow
+            const glowGrad = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, r * 1.2);
+            glowGrad.addColorStop(0, "rgba(0, 210, 255, 0.1)");
+            glowGrad.addColorStop(1, "rgba(0, 210, 255, 0)");
+            ctx.fillStyle = glowGrad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Draw segments
+            for (let i = 0; i < players.length; i++) {
+                const startA = spinAngle + i * segAngle;
+                const endA = startA + segAngle;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, r, startA, endA);
+                ctx.closePath();
+                const c = colors[i % colors.length];
+                ctx.fillStyle = c + "40";
+                ctx.fill();
+                ctx.strokeStyle = c;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Player name
+                const midA = startA + segAngle / 2;
+                const tx = cx + Math.cos(midA) * r * 0.6;
+                const ty = cy + Math.sin(midA) * r * 0.6;
+                ctx.save();
+                ctx.translate(tx, ty);
+                ctx.rotate(midA + Math.PI / 2);
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold " + Math.max(16, Math.min(28, 120 / players.length)) + "px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                const name = players[i].name.length > 8 ? players[i].name.slice(0,7)+"…" : players[i].name;
+                ctx.fillText(name, 0, 0);
+                ctx.restore();
+            }
+
+            // Center circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.15, 0, Math.PI * 2);
+            const centerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.15);
+            centerGrad.addColorStop(0, "#1a2035");
+            centerGrad.addColorStop(1, "#0a0e17");
+            ctx.fillStyle = centerGrad;
+            ctx.fill();
+            ctx.strokeStyle = "#00d2ff";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Pointer (top)
+            ctx.beginPath();
+            ctx.moveTo(cx - 14, cy - r - 8);
+            ctx.lineTo(cx + 14, cy - r - 8);
+            ctx.lineTo(cx, cy - r + 18);
+            ctx.closePath();
+            ctx.fillStyle = "#ff6b35";
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Sparks during spin
+            if (progress < 0.9) {
+                for (let s = 0; s < 3; s++) {
+                    const sx = cx + (Math.random() - 0.5) * r * 2;
+                    const sy = cy + (Math.random() - 0.5) * r * 2;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, Math.random() * 3 + 1, 0, Math.PI * 2);
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)] + "80";
+                    ctx.fill();
+                }
+            }
+
+            if (progress < 1) {
+                requestAnimationFrame(drawWheel);
+            } else {
+                resolve();
+            }
+        }
+        drawWheel();
+    });
+
+    // Phase 2: Reveal rolls one by one (0.5s each)
+    statusEl.innerHTML = '🎲 <b>' + t("pvp_revealing") + '</b>';
+    for (let i = 0; i < players.length; i++) {
+        const row = document.getElementById("pvp-row-" + i);
+        if (!row) continue;
+        const rollSpan = row.querySelector(".pvp-player-roll");
+
+        // Drum roll effect
+        const drumDuration = 400;
+        const drumStart = Date.now();
+        await new Promise(r2 => {
+            function drum() {
+                const elapsed = Date.now() - drumStart;
+                if (elapsed < drumDuration) {
+                    rollSpan.textContent = (Math.random() * 100).toFixed(2);
+                    rollSpan.style.opacity = "1";
+                    requestAnimationFrame(drum);
+                } else {
+                    const roll = players[i].roll || 0;
+                    rollSpan.textContent = roll.toFixed(2);
+                    rollSpan.className = "pvp-player-roll " + (roll >= 50 ? "high" : "low");
+                    r2();
+                }
+            }
+            drum();
+        });
+        await new Promise(r3 => setTimeout(r3, 200));
+    }
+
+    // Phase 3: Flash winner
+    await new Promise(r4 => setTimeout(r4, 500));
+
+    // Flash canvas
+    const flashStart = Date.now();
+    await new Promise(resolve => {
+        function flash() {
+            const elapsed = Date.now() - flashStart;
+            if (elapsed < 600) {
+                const alpha = Math.sin(elapsed / 100 * Math.PI) * 0.4;
+                ctx.fillStyle = `rgba(255,255,255,${Math.abs(alpha)})`;
+                ctx.fillRect(0, 0, W, H);
+                requestAnimationFrame(flash);
+            } else {
+                resolve();
+            }
+        }
+        flash();
+    });
+
+    // Draw winner on canvas
+    ctx.clearRect(0, 0, W, H);
+    const winnerColor = colors[winnerIdx % colors.length];
+
+    // Winner glow
+    const glow = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W*0.4);
+    glow.addColorStop(0, winnerColor + "30");
+    glow.addColorStop(1, "transparent");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.font = "bold 80px sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.fillText("👑", W/2, H/2 - 40);
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = winnerColor;
+    ctx.fillText(players[winnerIdx].name, W/2, H/2 + 30);
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillStyle = "#4caf50";
+    const pot = data.bet * players.length;
+    const prize = pot * (1 - data.commission);
+    ctx.fillText("+" + prize.toFixed(2) + " TON", W/2, H/2 + 80);
+
+    // Mark winner/loser rows
+    for (let i = 0; i < players.length; i++) {
+        const row = document.getElementById("pvp-row-" + i);
+        if (!row) continue;
+        if (i === winnerIdx) {
+            row.className = "pvp-player-row winner";
+            row.querySelector(".pvp-player-name").innerHTML = `👑 <span style="color:${winnerColor}">${players[i].name}</span>`;
+        } else {
+            row.className = "pvp-player-row loser";
+        }
+    }
+
+    // Confetti!
+    const isMyWin = data.winner_id === user.user_id;
+    if (isMyWin) {
+        spawnConfetti();
+    }
+
+    // Show result
+    statusEl.innerHTML = '🏆 ' + t("pvp_finished");
+    const resultEl = document.getElementById("pvp-battle-result");
+    resultEl.style.display = "";
+    if (isMyWin) {
+        resultEl.className = "pvp-battle-result win";
+        resultEl.innerHTML = `🎉 ${t("you_won")} +${(prize - data.bet).toFixed(4)} TON`;
+    } else {
+        resultEl.className = "pvp-battle-result lose";
+        resultEl.innerHTML = `💔 ${t("you_lost")} -${data.bet.toFixed(4)} TON`;
+    }
+
+    try { user = await apiCall("/api/user/me"); } catch(e) {}
+    document.getElementById("pvp-balance").textContent = (user.balance || 0).toFixed(4);
+}
+
+function showPvpFinalState(data) {
+    const statusEl = document.getElementById("pvp-lobby-status");
+    const playersList = document.getElementById("pvp-players-list");
+    const colors = ["#00d2ff","#ff6b35","#7c4dff","#4caf50","#f44336","#ffc107","#e91e63","#00bcd4","#ff9800","#9c27b0"];
+
+    document.getElementById("pvp-arena").style.display = "none";
+    statusEl.innerHTML = '🏆 ' + t("pvp_finished");
+    playersList.innerHTML = data.players.map(p => {
+        const isWinner = p.user_id === data.winner_id;
+        const cls = isWinner ? "winner" : "loser";
+        const rollCls = (p.roll || 0) >= 50 ? "high" : "low";
+        return `
+            <div class="pvp-player-row ${cls}">
+                <span class="pvp-player-name">${isWinner ? "👑" : "👤"} ${p.name}</span>
+                <span class="pvp-player-roll ${rollCls}">${(p.roll || 0).toFixed(2)}</span>
+            </div>
+        `;
+    }).join("");
+
+    const resultEl = document.getElementById("pvp-battle-result");
+    resultEl.style.display = "";
+    const isMyWin = data.winner_id === user.user_id;
+    const pot = data.bet * data.players.length;
+    const prize = pot * (1 - data.commission);
+    if (isMyWin) {
+        resultEl.className = "pvp-battle-result win";
+        resultEl.innerHTML = `🎉 ${t("you_won")} +${(prize - data.bet).toFixed(4)} TON`;
+    } else {
+        resultEl.className = "pvp-battle-result lose";
+        resultEl.innerHTML = `💔 ${t("you_lost")} -${data.bet.toFixed(4)} TON`;
+    }
+}
+
+function spawnConfetti() {
+    const container = document.getElementById("pvp-confetti-container");
+    const confettiColors = ["#ff6b35","#00d2ff","#4caf50","#ffc107","#e91e63","#7c4dff","#ff9800"];
+    for (let i = 0; i < 60; i++) {
+        const el = document.createElement("div");
+        el.className = "pvp-confetti";
+        el.style.left = Math.random() * 100 + "%";
+        el.style.top = "-10px";
+        el.style.background = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+        el.style.width = (Math.random() * 8 + 4) + "px";
+        el.style.height = (Math.random() * 8 + 4) + "px";
+        el.style.borderRadius = Math.random() > 0.5 ? "50%" : "2px";
+        el.style.animationDelay = (Math.random() * 1.5) + "s";
+        el.style.animationDuration = (Math.random() * 2 + 2) + "s";
+        container.appendChild(el);
+    }
+    setTimeout(() => { container.innerHTML = ""; }, 5000);
+}
+
 function pvpBackToMain() {
     if (pvpPolling) { clearInterval(pvpPolling); pvpPolling = null; }
     pvpCurrentLobby = null;
+    document.getElementById("pvp-arena").style.display = "none";
+    document.getElementById("pvp-confetti-container").innerHTML = "";
     loadPvp();
 }
