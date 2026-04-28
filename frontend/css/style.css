@@ -1009,6 +1009,20 @@ body {
     border-color: var(--accent);
 }
 
+.withdraw-warning {
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: #ffc107;
+    line-height: 1.4;
+}
+
 /* ── Contest ───────────────────────────────────────────── */
 
 .contest-rules-card,

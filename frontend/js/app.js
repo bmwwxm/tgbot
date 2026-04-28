@@ -186,6 +186,19 @@ async function loadWithdraw() {
     document.getElementById("withdraw-balance").textContent = (user.balance || 0).toFixed(4);
     document.getElementById("withdraw-fee").textContent = settings.withdrawal_fee;
     updateWithdrawNet();
+    // Check active deposit requirement
+    try {
+        const info = await apiCall("/api/withdraw/info");
+        const warn = document.getElementById("withdraw-no-deposit-warn");
+        const btn = document.getElementById("withdraw-submit-btn");
+        if (info && !info.has_active_deposit) {
+            if (warn) warn.style.display = "block";
+            if (btn) btn.disabled = true;
+        } else {
+            if (warn) warn.style.display = "none";
+            if (btn) btn.disabled = false;
+        }
+    } catch (e) {}
 }
 
 function setMaxWithdraw() {

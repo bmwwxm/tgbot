@@ -322,6 +322,15 @@ class Database:
             )
         return self._rows_to_list(rows)
 
+    async def has_active_deposit(self, user_id: int) -> bool:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT 1 FROM deposits WHERE user_id = $1 AND status = 'active' LIMIT 1",
+                user_id,
+            )
+        return row is not None
+
     async def get_deposits_stats(self) -> dict[str, Any]:
         assert self.pool is not None
         async with self.pool.acquire() as conn:

@@ -204,6 +204,11 @@
                 <h2 class="balance-amount"><span id="withdraw-balance">0.0000</span> TON</h2>
             </div>
 
+            <div id="withdraw-no-deposit-warn" class="withdraw-warning" style="display:none">
+                <span>⚠️</span>
+                <span data-i18n="withdraw_need_deposit">To withdraw, you need at least one active deposit. Please make a deposit first.</span>
+            </div>
+
             <div class="form-section">
                 <div class="input-group">
                     <label data-i18n="amount">Amount (TON)</label>
@@ -220,7 +225,7 @@
                 <div class="fee-info">
                     <span data-i18n="you_receive">You receive</span>: <span id="withdraw-net">0.00</span> TON
                 </div>
-                <button class="btn btn-primary btn-large" onclick="submitWithdraw()">
+                <button class="btn btn-primary btn-large" id="withdraw-submit-btn" onclick="submitWithdraw()">
                     <span>💸</span> <span data-i18n="confirm_withdraw">Confirm Withdrawal</span>
                 </button>
             </div>

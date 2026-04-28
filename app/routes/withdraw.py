@@ -48,6 +48,13 @@ async def create_withdrawal(
     if not addr or not is_valid_ton:
         raise HTTPException(status_code=400, detail="Invalid TON address. Must start with EQ or UQ.")
 
+    has_deposit = await _db.has_active_deposit(user["user_id"])
+    if not has_deposit:
+        raise HTTPException(
+            status_code=400,
+            detail="Withdrawal requires an active deposit. Please make a deposit first.",
+        )
+
     recent = await _db.count_recent_withdrawals(user["user_id"], seconds=60)
     if recent >= 3:
         raise HTTPException(
@@ -87,8 +94,10 @@ async def withdrawal_info(user: dict = Depends(get_current_user)):
     min_withdrawal = float(min_w_str) if min_w_str else config.min_withdrawal
     fee_str = await _db.get_setting("withdrawal_fee")
     fee = float(fee_str) if fee_str else config.withdrawal_fee
+    has_deposit = await _db.has_active_deposit(user["user_id"])
     return {
         "min_withdrawal": min_withdrawal,
         "fee": fee,
         "balance": user["balance"],
+        "has_active_deposit": has_deposit,
     }
