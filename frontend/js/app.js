@@ -79,6 +79,8 @@ function navigate(screen) {
     if (screen === "admin") loadAdmin();
     if (screen === "mines") loadMines();
     if (screen === "contest") loadContest();
+    if (screen === "crash") loadCrash();
+    if (screen === "pvp") loadPvp();
 }
 
 function showScreen(name) {
@@ -1364,4 +1366,383 @@ async function updateFakeStatus() {
             el.style.display = "none";
         }
     } catch (e) {}
+}
+
+// ── Crash Game ─────────────────────────────────────────
+
+let crashGame = null;
+let crashTimer = null;
+let crashStartTime = 0;
+let crashCanvas = null;
+let crashCtx = null;
+
+async function loadCrash() {
+    if (!user) return;
+    try { user = await apiCall("/api/user/me"); } catch(e) {}
+    document.getElementById("crash-balance").textContent = (user.balance || 0).toFixed(4);
+
+    // Check for active game
+    try {
+        const active = await apiCall("/api/crash/active");
+        if (active.active) {
+            crashGame = active;
+            showCrashGame();
+            return;
+        }
+    } catch(e) {}
+
+    document.getElementById("crash-setup").style.display = "";
+    document.getElementById("crash-game-area").style.display = "none";
+    document.getElementById("crash-result").style.display = "none";
+
+    // Load history
+    loadCrashHistory();
+}
+
+async function loadCrashHistory() {
+    try {
+        const data = await apiCall("/api/crash/history");
+        const list = document.getElementById("crash-history-list");
+        if (!data.games || !data.games.length) {
+            list.innerHTML = '<span style="color:var(--text-secondary);font-size:12px">' + t("no_history") + '</span>';
+            return;
+        }
+        list.innerHTML = data.games.slice(0, 20).map(g => {
+            const cp = g.crash_point || 0;
+            let cls = "red";
+            if (g.status === "cashout") cls = "green";
+            else if (cp >= 2) cls = "blue";
+            return `<span class="crash-history-item ${cls}">${cp.toFixed(2)}x</span>`;
+        }).join("");
+    } catch(e) {}
+}
+
+async function startCrashGame() {
+    const bet = parseFloat(document.getElementById("crash-bet").value);
+    if (!bet || bet < 0.1) { showToast(t("invalid_amount"), "error"); return; }
+    if (!user || bet > user.balance) { showToast(t("insufficient_balance"), "error"); return; }
+
+    try {
+        const res = await apiCall("/api/crash/bet", "POST", { bet });
+        crashGame = res;
+        showCrashGame();
+    } catch(e) {
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+function showCrashGame() {
+    document.getElementById("crash-setup").style.display = "none";
+    document.getElementById("crash-game-area").style.display = "";
+    document.getElementById("crash-result").style.display = "none";
+
+    document.getElementById("crash-current-bet").textContent = crashGame.bet;
+
+    const multEl = document.getElementById("crash-current-mult");
+    const profitEl = document.getElementById("crash-current-profit");
+    const cashoutEl = document.getElementById("crash-cashout-amount");
+    const displayEl = document.querySelector(".crash-multiplier-display");
+    displayEl.className = "crash-multiplier-display";
+
+    crashCanvas = document.getElementById("crash-canvas");
+    crashCtx = crashCanvas.getContext("2d");
+    crashCanvas.width = crashCanvas.offsetWidth * 2;
+    crashCanvas.height = 440;
+
+    crashStartTime = Date.now();
+    let crashed = false;
+
+    function drawChart(mult) {
+        const ctx = crashCtx;
+        const w = crashCanvas.width;
+        const h = crashCanvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // Grid
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 5; i++) {
+            const y = h - (h * i / 6);
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+
+        // Curve
+        const grad = ctx.createLinearGradient(0, h, w, 0);
+        grad.addColorStop(0, "#00d2ff");
+        grad.addColorStop(1, "#7c4dff");
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        const steps = 100;
+        const maxMult = Math.max(mult, 2);
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const m = 1 + (mult - 1) * Math.pow(t, 1.5);
+            const x = t * w;
+            const y = h - ((m - 1) / (maxMult - 1)) * (h * 0.85);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Fill under curve
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        const fillGrad = ctx.createLinearGradient(0, 0, 0, h);
+        fillGrad.addColorStop(0, "rgba(0, 210, 255, 0.15)");
+        fillGrad.addColorStop(1, "rgba(0, 210, 255, 0.01)");
+        ctx.fillStyle = fillGrad;
+        ctx.fill();
+
+        // Rocket emoji at end
+        const endX = w;
+        const endY = h - ((mult - 1) / (maxMult - 1)) * (h * 0.85);
+        ctx.font = "32px serif";
+        ctx.fillText("🚀", endX - 40, endY - 5);
+    }
+
+    if (crashTimer) clearInterval(crashTimer);
+
+    crashTimer = setInterval(() => {
+        const elapsed = (Date.now() - crashStartTime) / 1000;
+        // Exponential growth: starts slow, accelerates
+        const mult = Math.pow(Math.E, 0.07 * elapsed);
+        const roundedMult = Math.floor(mult * 100) / 100;
+
+        if (roundedMult >= crashGame.crash_point) {
+            // CRASHED
+            crashed = true;
+            clearInterval(crashTimer);
+            crashTimer = null;
+            multEl.textContent = crashGame.crash_point.toFixed(2);
+            displayEl.classList.add("crashed");
+            profitEl.textContent = (-crashGame.bet).toFixed(4);
+            cashoutEl.textContent = "0.00";
+            document.getElementById("crash-cashout-btn").disabled = true;
+            drawChart(crashGame.crash_point);
+
+            setTimeout(() => {
+                showCrashResult(false, crashGame.crash_point, 0, crashGame.bet);
+            }, 1500);
+            return;
+        }
+
+        multEl.textContent = roundedMult.toFixed(2);
+        const payout = crashGame.bet * roundedMult;
+        profitEl.textContent = (payout - crashGame.bet).toFixed(4);
+        cashoutEl.textContent = payout.toFixed(2);
+        drawChart(roundedMult);
+    }, 50);
+}
+
+async function crashCashout() {
+    if (!crashGame || !crashTimer) return;
+    const multEl = document.getElementById("crash-current-mult");
+    const currentMult = parseFloat(multEl.textContent);
+
+    clearInterval(crashTimer);
+    crashTimer = null;
+
+    try {
+        const res = await apiCall("/api/crash/cashout", "POST", { multiplier: currentMult });
+        if (res.status === "crashed") {
+            showCrashResult(false, res.crash_point, 0, crashGame.bet);
+        } else {
+            showCrashResult(true, res.crash_point, res.payout, crashGame.bet, res.cashout_at);
+        }
+    } catch(e) {
+        showToast(e.message || t("error"), "error");
+        resetCrash();
+    }
+}
+
+function showCrashResult(won, crashPoint, payout, bet, cashoutAt) {
+    document.getElementById("crash-game-area").style.display = "none";
+    document.getElementById("crash-result").style.display = "";
+
+    const displayEl = document.querySelector(".crash-multiplier-display");
+    const content = document.getElementById("crash-result-content");
+
+    if (won) {
+        displayEl.className = "crash-multiplier-display won";
+        const profit = payout - bet;
+        content.innerHTML = `
+            <div class="crash-result-win">
+                <div style="font-size:40px;margin-bottom:8px">🎉</div>
+                <div>${t("you_won")} +${profit.toFixed(4)} TON</div>
+                <div style="font-size:16px;margin-top:6px;opacity:0.7">${t("cashout")} ${cashoutAt.toFixed(2)}x | ${t("crash_at")} ${crashPoint.toFixed(2)}x</div>
+            </div>`;
+    } else {
+        displayEl.className = "crash-multiplier-display crashed";
+        content.innerHTML = `
+            <div class="crash-result-lose">
+                <div style="font-size:40px;margin-bottom:8px">💥</div>
+                <div>${t("crashed_at")} ${crashPoint.toFixed(2)}x</div>
+                <div style="font-size:16px;margin-top:6px;opacity:0.7">-${bet.toFixed(4)} TON</div>
+            </div>`;
+    }
+
+    try { user = apiCall("/api/user/me").then(u => { user = u; }); } catch(e) {}
+}
+
+function resetCrash() {
+    crashGame = null;
+    if (crashTimer) { clearInterval(crashTimer); crashTimer = null; }
+    document.getElementById("crash-cashout-btn").disabled = false;
+    loadCrash();
+}
+
+// ── PvP Battle ─────────────────────────────────────────
+
+let pvpPolling = null;
+let pvpCurrentLobby = null;
+
+async function loadPvp() {
+    if (!user) return;
+    try { user = await apiCall("/api/user/me"); } catch(e) {}
+    document.getElementById("pvp-balance").textContent = (user.balance || 0).toFixed(4);
+
+    document.getElementById("pvp-main").style.display = "";
+    document.getElementById("pvp-lobby-view").style.display = "none";
+    pvpCurrentLobby = null;
+    if (pvpPolling) { clearInterval(pvpPolling); pvpPolling = null; }
+
+    updatePvpPotPreview();
+    loadPvpLobbies();
+}
+
+function setPvpPlayers(n) {
+    document.getElementById("pvp-max-players").value = n;
+    document.querySelectorAll(".pvp-preset").forEach(b => b.classList.remove("active"));
+    event.target.classList.add("active");
+    updatePvpPotPreview();
+}
+
+function updatePvpPotPreview() {
+    const bet = parseFloat(document.getElementById("pvp-bet").value) || 0;
+    const players = parseInt(document.getElementById("pvp-max-players").value) || 2;
+    document.getElementById("pvp-pot-preview").textContent = (bet * players).toFixed(2);
+}
+
+document.addEventListener("input", (e) => {
+    if (e.target.id === "pvp-bet" || e.target.id === "pvp-max-players") updatePvpPotPreview();
+});
+
+async function loadPvpLobbies() {
+    try {
+        const data = await apiCall("/api/pvp/lobbies");
+        const list = document.getElementById("pvp-lobbies-list");
+        if (!data.lobbies || !data.lobbies.length) {
+            list.innerHTML = '<p class="empty-text">' + t("pvp_no_lobbies") + '</p>';
+            return;
+        }
+        list.innerHTML = data.lobbies.map(lb => `
+            <div class="pvp-lobby-card" onclick="joinPvpLobby(${lb.lobby_id})">
+                <div class="pvp-lobby-card-left">
+                    <div class="pvp-lobby-card-bet">${lb.bet} TON</div>
+                    <div class="pvp-lobby-card-info">${lb.current_players}/${lb.max_players} ${t("pvp_players")}</div>
+                </div>
+                <button class="pvp-lobby-card-join">⚔️ ${t("pvp_join")}</button>
+            </div>
+        `).join("");
+    } catch(e) {}
+}
+
+async function createPvpLobby() {
+    const bet = parseFloat(document.getElementById("pvp-bet").value);
+    const maxPlayers = parseInt(document.getElementById("pvp-max-players").value);
+    if (!bet || bet < 0.1) { showToast(t("invalid_amount"), "error"); return; }
+    if (!user || bet > user.balance) { showToast(t("insufficient_balance"), "error"); return; }
+
+    try {
+        const res = await apiCall("/api/pvp/create", "POST", { bet, max_players: maxPlayers });
+        pvpCurrentLobby = res.lobby_id;
+        showPvpLobby(res.lobby_id);
+    } catch(e) {
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+async function joinPvpLobby(lobbyId) {
+    try {
+        const res = await apiCall("/api/pvp/join", "POST", { lobby_id: lobbyId });
+        pvpCurrentLobby = lobbyId;
+        showPvpLobby(lobbyId);
+    } catch(e) {
+        showToast(e.message || t("error"), "error");
+    }
+}
+
+async function showPvpLobby(lobbyId) {
+    document.getElementById("pvp-main").style.display = "none";
+    document.getElementById("pvp-lobby-view").style.display = "";
+    document.getElementById("pvp-lobby-id").textContent = lobbyId;
+    document.getElementById("pvp-battle-result").style.display = "none";
+
+    await refreshPvpLobby(lobbyId);
+
+    if (pvpPolling) clearInterval(pvpPolling);
+    pvpPolling = setInterval(() => refreshPvpLobby(lobbyId), 2000);
+}
+
+async function refreshPvpLobby(lobbyId) {
+    try {
+        const data = await apiCall("/api/pvp/lobby/" + lobbyId);
+        document.getElementById("pvp-lobby-bet-amount").textContent = data.bet;
+        document.getElementById("pvp-slots-filled").textContent = data.players.length;
+        document.getElementById("pvp-slots-total").textContent = data.max_players;
+
+        const statusEl = document.getElementById("pvp-lobby-status");
+        const playersList = document.getElementById("pvp-players-list");
+
+        if (data.status === "waiting") {
+            statusEl.innerHTML = '<span class="pvp-waiting-anim">⏳</span> ' + t("pvp_waiting");
+            playersList.innerHTML = data.players.map(p => `
+                <div class="pvp-player-row">
+                    <span class="pvp-player-name">👤 ${p.name}</span>
+                    <span class="pvp-player-roll" style="opacity:0.3">—</span>
+                </div>
+            `).join("");
+        } else if (data.status === "finished") {
+            if (pvpPolling) { clearInterval(pvpPolling); pvpPolling = null; }
+
+            statusEl.innerHTML = '🏆 ' + t("pvp_finished");
+            playersList.innerHTML = data.players.map(p => {
+                const isWinner = p.user_id === data.winner_id;
+                const cls = isWinner ? "winner" : "loser";
+                const rollCls = (p.roll || 0) >= 50 ? "high" : "low";
+                return `
+                    <div class="pvp-player-row ${cls}">
+                        <span class="pvp-player-name">${isWinner ? "👑" : "👤"} ${p.name}</span>
+                        <span class="pvp-player-roll ${rollCls}">${(p.roll || 0).toFixed(2)}</span>
+                    </div>
+                `;
+            }).join("");
+
+            const resultEl = document.getElementById("pvp-battle-result");
+            resultEl.style.display = "";
+            const isMyWin = data.winner_id === user.user_id;
+            const pot = data.bet * data.players.length;
+            const prize = pot * (1 - data.commission);
+            if (isMyWin) {
+                resultEl.className = "pvp-battle-result win";
+                resultEl.innerHTML = `🎉 ${t("you_won")} +${(prize - data.bet).toFixed(4)} TON`;
+            } else {
+                resultEl.className = "pvp-battle-result lose";
+                resultEl.innerHTML = `💔 ${t("you_lost")} -${data.bet.toFixed(4)} TON`;
+            }
+
+            try { user = await apiCall("/api/user/me"); } catch(e) {}
+            document.getElementById("pvp-balance").textContent = (user.balance || 0).toFixed(4);
+        }
+    } catch(e) {
+        console.warn("PvP poll error", e);
+    }
+}
+
+function pvpBackToMain() {
+    if (pvpPolling) { clearInterval(pvpPolling); pvpPolling = null; }
+    pvpCurrentLobby = null;
+    loadPvp();
 }

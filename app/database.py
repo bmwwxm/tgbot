@@ -123,6 +123,48 @@ class Database:
                 UNIQUE(user_id, task_id)
             )""")
             await conn.execute("""
+            CREATE TABLE IF NOT EXISTS crash_games (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                bet DOUBLE PRECISION NOT NULL,
+                crash_point DOUBLE PRECISION NOT NULL,
+                cashout_at DOUBLE PRECISION DEFAULT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                server_seed TEXT NOT NULL,
+                seed_hash TEXT NOT NULL,
+                payout DOUBLE PRECISION DEFAULT 0.0,
+                created_at DOUBLE PRECISION NOT NULL,
+                finished_at DOUBLE PRECISION DEFAULT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )""")
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_lobbies (
+                id SERIAL PRIMARY KEY,
+                creator_id BIGINT NOT NULL,
+                bet DOUBLE PRECISION NOT NULL,
+                max_players INTEGER NOT NULL DEFAULT 2,
+                status TEXT NOT NULL DEFAULT 'waiting',
+                winner_id BIGINT DEFAULT NULL,
+                winner_number DOUBLE PRECISION DEFAULT NULL,
+                commission DOUBLE PRECISION NOT NULL DEFAULT 0.05,
+                server_seed TEXT NOT NULL,
+                seed_hash TEXT NOT NULL,
+                created_at DOUBLE PRECISION NOT NULL,
+                finished_at DOUBLE PRECISION DEFAULT NULL,
+                FOREIGN KEY (creator_id) REFERENCES users(user_id)
+            )""")
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_players (
+                id SERIAL PRIMARY KEY,
+                lobby_id INTEGER NOT NULL,
+                user_id BIGINT NOT NULL,
+                roll DOUBLE PRECISION DEFAULT NULL,
+                joined_at DOUBLE PRECISION NOT NULL,
+                UNIQUE(lobby_id, user_id),
+                FOREIGN KEY (lobby_id) REFERENCES pvp_lobbies(id),
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )""")
+            await conn.execute("""
             CREATE TABLE IF NOT EXISTS contest_submissions (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -874,3 +916,300 @@ class Database:
                     amount, user_id,
                 )
         return True
+
+    # ── Crash game methods ──────────────────────────────────
+
+    async def get_active_crash_game(self, user_id: int) -> dict[str, Any] | None:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM crash_games WHERE user_id = $1 AND status = 'active'",
+                user_id,
+            )
+        return self._row_to_dict(row)
+
+    async def start_crash_game_safe(
+        self, user_id: int, bet: float, crash_point: float,
+        server_seed: str, seed_hash: str,
+    ) -> int | None:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    "SELECT user_id FROM users WHERE user_id = $1 AND balance >= $2 FOR UPDATE",
+                    user_id, bet,
+                )
+                if not row:
+                    return None
+                existing = await conn.fetchrow(
+                    "SELECT id FROM crash_games WHERE user_id = $1 AND status = 'active'",
+                    user_id,
+                )
+                if existing:
+                    return None
+                await conn.execute(
+                    "UPDATE users SET balance = balance - $1 WHERE user_id = $2",
+                    bet, user_id,
+                )
+                r = await conn.fetchrow(
+                    """INSERT INTO crash_games
+                       (user_id, bet, crash_point, server_seed, seed_hash, created_at)
+                       VALUES ($1, $2, $3, $4, $5, $6)
+                       RETURNING id""",
+                    user_id, bet, crash_point, server_seed, seed_hash, time.time(),
+                )
+                return r["id"] if r else None
+
+    async def crash_cashout_safe(
+        self, user_id: int, cashout_multiplier: float,
+    ) -> dict[str, Any] | None:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                game = await conn.fetchrow(
+                    """UPDATE crash_games SET status = 'cashing_out'
+                       WHERE user_id = $1 AND status = 'active'
+                       RETURNING *""",
+                    user_id,
+                )
+                if not game:
+                    return None
+                game = dict(game)
+                if cashout_multiplier >= game["crash_point"]:
+                    await conn.execute(
+                        "UPDATE crash_games SET status = 'crashed', finished_at = $1 WHERE id = $2",
+                        time.time(), game["id"],
+                    )
+                    return {
+                        "too_late": True,
+                        "crash_point": game["crash_point"],
+                        "server_seed": game["server_seed"],
+                    }
+                payout = game["bet"] * cashout_multiplier
+                await conn.execute(
+                    """UPDATE crash_games
+                       SET status = 'cashout', cashout_at = $1, payout = $2, finished_at = $3
+                       WHERE id = $4""",
+                    cashout_multiplier, payout, time.time(), game["id"],
+                )
+                await conn.execute(
+                    "UPDATE users SET balance = balance + $1 WHERE user_id = $2",
+                    payout, user_id,
+                )
+                return {
+                    "too_late": False,
+                    "crash_point": game["crash_point"],
+                    "cashout_at": cashout_multiplier,
+                    "payout": payout,
+                    "bet": game["bet"],
+                    "server_seed": game["server_seed"],
+                }
+
+    async def crash_auto_resolve(self, user_id: int) -> dict[str, Any] | None:
+        """Auto-resolve a crash game that crashed (player didn't cashout in time)."""
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                game = await conn.fetchrow(
+                    """UPDATE crash_games SET status = 'crashed', finished_at = $1
+                       WHERE user_id = $2 AND status = 'active'
+                       RETURNING *""",
+                    time.time(), user_id,
+                )
+                return self._row_to_dict(game)
+
+    async def get_crash_history(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, bet, crash_point, cashout_at, status, payout, seed_hash, server_seed, created_at
+                   FROM crash_games WHERE user_id = $1
+                   ORDER BY created_at DESC LIMIT $2""",
+                user_id, limit,
+            )
+        return self._rows_to_list(rows)
+
+    # ── PvP methods ─────────────────────────────────────────
+
+    async def create_pvp_lobby_safe(
+        self, creator_id: int, bet: float, max_players: int,
+        server_seed: str, seed_hash: str, commission: float,
+    ) -> dict[str, Any] | None:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    "SELECT user_id FROM users WHERE user_id = $1 AND balance >= $2 FOR UPDATE",
+                    creator_id, bet,
+                )
+                if not row:
+                    return None
+                await conn.execute(
+                    "UPDATE users SET balance = balance - $1 WHERE user_id = $2",
+                    bet, creator_id,
+                )
+                now = time.time()
+                lobby = await conn.fetchrow(
+                    """INSERT INTO pvp_lobbies
+                       (creator_id, bet, max_players, server_seed, seed_hash, commission, created_at)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id""",
+                    creator_id, bet, max_players, server_seed, seed_hash, commission, now,
+                )
+                lobby_id = lobby["id"]
+                await conn.execute(
+                    "INSERT INTO pvp_players (lobby_id, user_id, joined_at) VALUES ($1, $2, $3)",
+                    lobby_id, creator_id, now,
+                )
+                return {"lobby_id": lobby_id}
+
+    async def join_pvp_lobby_safe(
+        self, lobby_id: int, user_id: int,
+    ) -> dict[str, Any] | str | None:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                lobby = await conn.fetchrow(
+                    "SELECT * FROM pvp_lobbies WHERE id = $1 AND status = 'waiting' FOR UPDATE",
+                    lobby_id,
+                )
+                if not lobby:
+                    return None
+                lobby = dict(lobby)
+                existing = await conn.fetchrow(
+                    "SELECT id FROM pvp_players WHERE lobby_id = $1 AND user_id = $2",
+                    lobby_id, user_id,
+                )
+                if existing:
+                    return "already_joined"
+                players = await conn.fetch(
+                    "SELECT * FROM pvp_players WHERE lobby_id = $1",
+                    lobby_id,
+                )
+                if len(players) >= lobby["max_players"]:
+                    return None
+                balance_row = await conn.fetchrow(
+                    "SELECT user_id FROM users WHERE user_id = $1 AND balance >= $2 FOR UPDATE",
+                    user_id, lobby["bet"],
+                )
+                if not balance_row:
+                    return "insufficient"
+                await conn.execute(
+                    "UPDATE users SET balance = balance - $1 WHERE user_id = $2",
+                    lobby["bet"], user_id,
+                )
+                await conn.execute(
+                    "INSERT INTO pvp_players (lobby_id, user_id, joined_at) VALUES ($1, $2, $3)",
+                    lobby_id, user_id, time.time(),
+                )
+                new_players = await conn.fetch(
+                    "SELECT * FROM pvp_players WHERE lobby_id = $1",
+                    lobby_id,
+                )
+                return {"lobby": lobby, "players": [dict(p) for p in new_players]}
+
+    async def add_pvp_bot_player(
+        self, lobby_id: int, fake_uid: int, display_name: str,
+    ) -> bool:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                lobby = await conn.fetchrow(
+                    "SELECT * FROM pvp_lobbies WHERE id = $1 AND status = 'waiting' FOR UPDATE",
+                    lobby_id,
+                )
+                if not lobby:
+                    return False
+                players = await conn.fetch(
+                    "SELECT * FROM pvp_players WHERE lobby_id = $1", lobby_id,
+                )
+                if len(players) >= lobby["max_players"]:
+                    return False
+                # Ensure fake user exists in users table
+                import secrets as _sec
+                fake_comment = f"bot_{_sec.token_hex(8)}"
+                await conn.execute(
+                    """INSERT INTO users (user_id, balance, first_name, is_blocked, deposit_comment, created_at)
+                       VALUES ($1, 0, $2, 0, $3, $4)
+                       ON CONFLICT (user_id) DO NOTHING""",
+                    fake_uid, display_name, fake_comment, time.time(),
+                )
+                await conn.execute(
+                    "INSERT INTO pvp_players (lobby_id, user_id, joined_at) VALUES ($1, $2, $3)",
+                    lobby_id, fake_uid, time.time(),
+                )
+                return True
+
+    async def get_pvp_lobby(self, lobby_id: int) -> dict[str, Any] | None:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM pvp_lobbies WHERE id = $1", lobby_id,
+            )
+        return self._row_to_dict(row)
+
+    async def get_pvp_players(self, lobby_id: int) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT pp.*, u.username, u.first_name
+                   FROM pvp_players pp
+                   LEFT JOIN users u ON pp.user_id = u.user_id
+                   WHERE pp.lobby_id = $1 ORDER BY pp.joined_at""",
+                lobby_id,
+            )
+        return self._rows_to_list(rows)
+
+    async def get_pvp_lobbies_waiting(self, limit: int = 20) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM pvp_lobbies WHERE status = 'waiting' ORDER BY created_at DESC LIMIT $1",
+                limit,
+            )
+        return self._rows_to_list(rows)
+
+    async def resolve_pvp_lobby(
+        self, lobby_id: int, winner_id: int, winner_roll: float,
+        rolls: list[tuple[int, float]], prize: float,
+    ) -> bool:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                lobby = await conn.fetchrow(
+                    "SELECT * FROM pvp_lobbies WHERE id = $1 AND status = 'waiting' FOR UPDATE",
+                    lobby_id,
+                )
+                if not lobby:
+                    return False
+                await conn.execute(
+                    """UPDATE pvp_lobbies
+                       SET status = 'finished', winner_id = $1, winner_number = $2, finished_at = $3
+                       WHERE id = $4""",
+                    winner_id, winner_roll, time.time(), lobby_id,
+                )
+                for uid, roll in rolls:
+                    await conn.execute(
+                        "UPDATE pvp_players SET roll = $1 WHERE lobby_id = $2 AND user_id = $3",
+                        roll, lobby_id, uid,
+                    )
+                # Credit prize to winner (only if real player)
+                if winner_id > 0:
+                    await conn.execute(
+                        "UPDATE users SET balance = balance + $1 WHERE user_id = $2",
+                        prize, winner_id,
+                    )
+                return True
+
+    async def get_pvp_history(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        assert self.pool is not None
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT l.*, pp.roll as my_roll,
+                          (SELECT COUNT(*) FROM pvp_players WHERE lobby_id = l.id) as player_count
+                   FROM pvp_lobbies l
+                   JOIN pvp_players pp ON pp.lobby_id = l.id AND pp.user_id = $1
+                   WHERE l.status = 'finished'
+                   ORDER BY l.finished_at DESC LIMIT $2""",
+                user_id, limit,
+            )
+        return self._rows_to_list(rows)

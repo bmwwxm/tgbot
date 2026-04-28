@@ -20,6 +20,8 @@ from app.routes import feed as feed_routes
 from app.routes import mines as mines_routes
 from app.routes import tasks as tasks_routes
 from app.routes import contest as contest_routes
+from app.routes import crash as crash_routes
+from app.routes import pvp as pvp_routes
 from app.services.ton import ton_service
 from app.feed_bot import close_feed_bot
 from app.services.scheduler import scheduler, init_scheduler
@@ -51,6 +53,8 @@ feed_routes.init_routes(db)
 mines_routes.init_routes(db)
 tasks_routes.init_routes(db)
 contest_routes.init_routes(db)
+crash_routes.init_routes(db)
+pvp_routes.init_routes(db)
 
 app.include_router(user_routes.router)
 app.include_router(deposit_routes.router)
@@ -61,6 +65,8 @@ app.include_router(feed_routes.router)
 app.include_router(mines_routes.router)
 app.include_router(tasks_routes.router)
 app.include_router(contest_routes.router)
+app.include_router(crash_routes.router)
+app.include_router(pvp_routes.router)
 
 
 # ── Broadcast endpoint (called from admin route) ───────

@@ -50,6 +50,15 @@ FEED_TEMPLATES = {
             "на <b>{mines_count}</b> минах!\n"
             "Множитель: <b>{multiplier:.2f}x</b>"
         ),
+        "crash_win": (
+            "🚀💰 <b>Выигрыш в Краш!</b>\n\n"
+            "@{username} забрал <b>{profit:.4f} TON</b>\n"
+            "Множитель: <b>{multiplier:.2f}x</b>"
+        ),
+        "pvp_win": (
+            "⚔️🏆 <b>Победа в PvP!</b>\n\n"
+            "@{username} выиграл битву и забрал <b>{profit:.4f} TON</b>"
+        ),
     },
     "en": {
         "deposit_received": (
@@ -78,6 +87,15 @@ FEED_TEMPLATES = {
             "@{username} just won <b>{profit:.4f} TON</b> "
             "with <b>{mines_count}</b> mines!\n"
             "Multiplier: <b>{multiplier:.2f}x</b>"
+        ),
+        "crash_win": (
+            "🚀💰 <b>Crash Win!</b>\n\n"
+            "@{username} cashed out <b>{profit:.4f} TON</b>\n"
+            "Multiplier: <b>{multiplier:.2f}x</b>"
+        ),
+        "pvp_win": (
+            "⚔️🏆 <b>PvP Victory!</b>\n\n"
+            "@{username} won the battle and took <b>{profit:.4f} TON</b>"
         ),
     },
 }

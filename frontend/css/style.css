@@ -1721,6 +1721,432 @@ body {
     font-size: 11px;
 }
 
+/* ── Games Grid (Dashboard) ───────────────────────────── */
+
+.games-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.game-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+}
+
+.game-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    transition: opacity 0.3s;
+}
+
+.game-card:active { transform: scale(0.96); }
+
+.game-mines::before { background: linear-gradient(135deg, #ff6b35, #ff9800); }
+.game-crash::before { background: linear-gradient(135deg, #7c4dff, #448aff); }
+.game-pvp::before { background: linear-gradient(135deg, #f44336, #ff5722); }
+
+.game-mines { border-color: rgba(255, 152, 0, 0.3); }
+.game-crash { border-color: rgba(124, 77, 255, 0.3); }
+.game-pvp { border-color: rgba(244, 67, 54, 0.3); }
+
+.game-card:hover::before { opacity: 0.15; }
+
+.game-card-icon {
+    font-size: 32px;
+    margin-bottom: 6px;
+    position: relative;
+}
+
+.game-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    position: relative;
+}
+
+.game-card-desc {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    position: relative;
+}
+
+/* ── Crash Game ───────────────────────────────────────── */
+
+.crash-setup, .crash-game-area, .crash-result {
+    padding: 0;
+}
+
+.crash-balance-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.crash-display {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.crash-rocket-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+#crash-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+}
+
+.crash-multiplier-display {
+    font-size: 56px;
+    font-weight: 800;
+    color: var(--accent-light);
+    line-height: 1;
+    margin: 8px 0;
+    text-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+    transition: color 0.3s;
+}
+
+.crash-multiplier-display.crashed {
+    color: #f44336;
+    text-shadow: 0 0 20px rgba(244, 67, 54, 0.3);
+}
+
+.crash-multiplier-display.won {
+    color: #4caf50;
+    text-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+.crash-x {
+    font-size: 28px;
+    opacity: 0.6;
+}
+
+.crash-bet-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+.crash-cashout-btn {
+    width: 100%;
+    font-size: 18px;
+    padding: 16px;
+    animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 10px rgba(76, 175, 80, 0.3); }
+    50% { box-shadow: 0 0 25px rgba(76, 175, 80, 0.6); }
+}
+
+.crash-result {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.crash-result-win {
+    color: #4caf50;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.crash-result-lose {
+    color: #f44336;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.crash-history-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.crash-history-item {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.crash-history-item.green { background: rgba(76, 175, 80, 0.2); color: #4caf50; }
+.crash-history-item.red { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+.crash-history-item.blue { background: rgba(0, 210, 255, 0.2); color: var(--accent-light); }
+
+/* ── PvP Battle ───────────────────────────────────────── */
+
+.pvp-balance-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.pvp-create-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.pvp-create-section h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+}
+
+.pvp-player-presets {
+    display: flex;
+    gap: 6px;
+}
+
+.pvp-preset {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: all 0.2s;
+}
+
+.pvp-preset.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.pvp-pot-info {
+    text-align: center;
+    margin: 12px 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.pvp-pot-info b {
+    color: var(--accent-light);
+    font-size: 16px;
+}
+
+.pvp-commission {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.pvp-lobbies-section h3 {
+    font-size: 15px;
+    margin-bottom: 10px;
+}
+
+.pvp-lobbies-list .empty-text {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 20px;
+}
+
+.pvp-lobby-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pvp-lobby-card:hover { border-color: var(--accent); }
+.pvp-lobby-card:active { transform: scale(0.98); }
+
+.pvp-lobby-card-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pvp-lobby-card-bet {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent-light);
+}
+
+.pvp-lobby-card-info {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.pvp-lobby-card-join {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+}
+
+.pvp-lobby-view {
+    padding: 0;
+}
+
+.pvp-lobby-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.pvp-lobby-header h3 {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.pvp-lobby-bet {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--accent-light);
+}
+
+.pvp-lobby-status {
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    padding: 8px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.pvp-players-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.pvp-player-row {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s;
+}
+
+.pvp-player-row.winner {
+    border-color: #4caf50;
+    background: rgba(76, 175, 80, 0.08);
+}
+
+.pvp-player-row.loser {
+    opacity: 0.5;
+}
+
+.pvp-player-name {
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pvp-player-roll {
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.pvp-player-roll.high { color: #4caf50; }
+.pvp-player-roll.low { color: #f44336; }
+
+.pvp-slots-info {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 8px 0;
+}
+
+.pvp-battle-result {
+    text-align: center;
+    padding: 16px;
+    border-radius: var(--radius);
+    margin-top: 12px;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.pvp-battle-result.win {
+    background: rgba(76, 175, 80, 0.12);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.pvp-battle-result.lose {
+    background: rgba(244, 67, 54, 0.12);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.pvp-history-section {
+    padding: 0;
+}
+
+.pvp-history-section h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.pvp-history-list .pvp-hist-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+
+.pvp-hist-item .won { color: #4caf50; font-weight: 700; }
+.pvp-hist-item .lost { color: #f44336; font-weight: 700; }
+
 /* ── Admin select ──────────────────────────────────────── */
 
 select {

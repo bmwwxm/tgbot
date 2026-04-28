@@ -95,9 +95,21 @@
                 </button>
             </div>
 
-            <div class="action-buttons" style="margin-top:0">
-                <button class="btn btn-accent btn-large" onclick="navigate('mines')">
-                    <span>💣</span> <span data-i18n="mines_game">Mines</span>
+            <div class="games-grid">
+                <button class="game-card game-mines" onclick="navigate('mines')">
+                    <div class="game-card-icon">💣</div>
+                    <div class="game-card-title" data-i18n="mines_game">Mines</div>
+                    <div class="game-card-desc" data-i18n="mines_desc">Find safe cells</div>
+                </button>
+                <button class="game-card game-crash" onclick="navigate('crash')">
+                    <div class="game-card-icon">🚀</div>
+                    <div class="game-card-title" data-i18n="crash_game">Crash</div>
+                    <div class="game-card-desc" data-i18n="crash_desc">Cash out in time</div>
+                </button>
+                <button class="game-card game-pvp" onclick="navigate('pvp')">
+                    <div class="game-card-icon">⚔️</div>
+                    <div class="game-card-title" data-i18n="pvp_game">PvP Battle</div>
+                    <div class="game-card-desc" data-i18n="pvp_desc">Fight for the pot</div>
                 </button>
             </div>
 
@@ -361,6 +373,128 @@
                         <p id="mines-server-seed-reveal" style="display:none">Server Seed: <code id="mines-server-seed">-</code></p>
                     </div>
                 </details>
+            </div>
+        </div>
+
+        <!-- Crash Game Screen -->
+        <div id="crash-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="crash_game">🚀 Crash</h2>
+            </div>
+
+            <div id="crash-setup" class="crash-setup">
+                <div class="crash-balance-card">
+                    <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                    <h2 class="balance-amount"><span id="crash-balance">0.0000</span> TON</h2>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="bet_amount">Bet (TON)</label>
+                    <input type="number" id="crash-bet" placeholder="0.1" min="0.1" step="0.1" value="0.1">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="startCrashGame()">
+                    <span>🚀</span> <span data-i18n="start_game">Start Game</span>
+                </button>
+                <div class="crash-history-section" style="margin-top:16px">
+                    <h3 data-i18n="recent_games">Recent Games</h3>
+                    <div id="crash-history-list" class="crash-history-list"></div>
+                </div>
+            </div>
+
+            <div id="crash-game-area" class="crash-game-area" style="display:none">
+                <div class="crash-display">
+                    <div class="crash-rocket-container">
+                        <canvas id="crash-canvas" width="340" height="220"></canvas>
+                    </div>
+                    <div class="crash-multiplier-display">
+                        <span id="crash-current-mult">1.00</span><span class="crash-x">x</span>
+                    </div>
+                    <div class="crash-bet-info">
+                        <span data-i18n="bet_amount">Bet</span>: <b id="crash-current-bet">0</b> TON
+                        &nbsp;|&nbsp;
+                        <span data-i18n="profit_label">Profit</span>: <b id="crash-current-profit">0.00</b> TON
+                    </div>
+                </div>
+                <button class="btn btn-success btn-large crash-cashout-btn" id="crash-cashout-btn" onclick="crashCashout()">
+                    💰 <span data-i18n="cashout">Cashout</span> <span id="crash-cashout-amount">0.00</span> TON
+                </button>
+            </div>
+
+            <div id="crash-result" class="crash-result" style="display:none">
+                <div id="crash-result-content"></div>
+                <button class="btn btn-primary btn-large" onclick="resetCrash()" style="margin-top:12px">
+                    <span>🔄</span> <span data-i18n="play_again">Play Again</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- PvP Battle Screen -->
+        <div id="pvp-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="pvp_game">⚔️ PvP Battle</h2>
+            </div>
+
+            <div class="pvp-balance-card">
+                <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                <h2 class="balance-amount"><span id="pvp-balance">0.0000</span> TON</h2>
+            </div>
+
+            <div id="pvp-main" class="pvp-main">
+                <div class="pvp-create-section">
+                    <h3 data-i18n="pvp_create">Create Battle</h3>
+                    <div class="input-group">
+                        <label data-i18n="bet_amount">Bet (TON)</label>
+                        <input type="number" id="pvp-bet" placeholder="0.1" min="0.1" step="0.1" value="0.5">
+                    </div>
+                    <div class="input-group">
+                        <label data-i18n="pvp_players">Players (2-10)</label>
+                        <div class="pvp-player-presets">
+                            <button class="pvp-preset active" onclick="setPvpPlayers(2)">2</button>
+                            <button class="pvp-preset" onclick="setPvpPlayers(3)">3</button>
+                            <button class="pvp-preset" onclick="setPvpPlayers(5)">5</button>
+                            <button class="pvp-preset" onclick="setPvpPlayers(10)">10</button>
+                        </div>
+                        <input type="number" id="pvp-max-players" value="2" min="2" max="10" style="margin-top:8px">
+                    </div>
+                    <div class="pvp-pot-info">
+                        <span data-i18n="pvp_pot">Pot</span>: <b id="pvp-pot-preview">1.0</b> TON
+                        <span class="pvp-commission">(5% <span data-i18n="fee">fee</span>)</span>
+                    </div>
+                    <button class="btn btn-primary btn-large" onclick="createPvpLobby()">
+                        ⚔️ <span data-i18n="pvp_create_btn">Create Battle</span>
+                    </button>
+                </div>
+
+                <div class="pvp-lobbies-section" style="margin-top:20px">
+                    <h3 data-i18n="pvp_open_battles">Open Battles</h3>
+                    <div id="pvp-lobbies-list" class="pvp-lobbies-list">
+                        <p class="empty-text" data-i18n="pvp_no_lobbies">No open battles right now</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pvp-lobby-view" class="pvp-lobby-view" style="display:none">
+                <div class="pvp-lobby-header">
+                    <h3>⚔️ <span data-i18n="pvp_battle">Battle</span> #<span id="pvp-lobby-id">0</span></h3>
+                    <div class="pvp-lobby-bet"><span id="pvp-lobby-bet-amount">0</span> TON</div>
+                </div>
+                <div class="pvp-lobby-status" id="pvp-lobby-status">
+                    <span data-i18n="pvp_waiting">Waiting for players...</span>
+                </div>
+                <div class="pvp-players-list" id="pvp-players-list"></div>
+                <div class="pvp-slots-info">
+                    <span id="pvp-slots-filled">0</span>/<span id="pvp-slots-total">0</span> <span data-i18n="pvp_players">players</span>
+                </div>
+                <div id="pvp-battle-result" class="pvp-battle-result" style="display:none"></div>
+                <button class="btn btn-primary btn-large" id="pvp-back-btn" onclick="pvpBackToMain()" style="margin-top:12px">
+                    ← <span data-i18n="back">Back</span>
+                </button>
+            </div>
+
+            <div class="pvp-history-section" style="margin-top:16px">
+                <h3 data-i18n="pvp_history">Battle History</h3>
+                <div id="pvp-history-list" class="pvp-history-list"></div>
             </div>
         </div>
 
