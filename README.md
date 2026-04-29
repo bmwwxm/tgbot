@@ -9,7 +9,7 @@ AI-powered arbitrage investment platform built as a Telegram Mini App with TON b
 - **Auto Payouts** — +10% profit automatically credited after 10 hours
 - **Auto Withdrawals** — Instant withdrawals to any TON wallet
 - **Referral Program** — 10% commission from referral profits
-- **Admin Panel** — Statistics, user management, settings, broadcast, balance adjustments
+- **Admin Panel** — Statistics, user management, settings, broadcast, balance adjustmentss
 - **Feed Channel** — Second bot publishes real-time payouts to a public channel
 - **Multi-language** — Russian and English with auto-detection
 - **Fully Configurable** — All parameters adjustable via admin panel or `.env`
