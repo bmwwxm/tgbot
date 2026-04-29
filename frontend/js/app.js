@@ -609,7 +609,7 @@ function switchAdminTab(tab) {
     if (tab === "users") loadAdminUsers();
     if (tab === "settings") loadAdminSettings();
     if (tab === "withdrawals") loadAdminWithdrawals("pending");
-    if (tab === "deposits") loadAdminDeposits("active");
+    if (tab === "deposits") loadAdminDeposits("pending");
     if (tab === "contest") loadAdminContest("pending");
     if (tab === "fakefeed") updateFakeStatus();
 }

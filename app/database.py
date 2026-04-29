@@ -368,7 +368,7 @@ class Database:
         assert self.pool is not None
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT 1 FROM deposits WHERE user_id = $1 AND status = 'active' LIMIT 1",
+                "SELECT 1 FROM deposits WHERE user_id = $1 AND status IN ('pending', 'processing') LIMIT 1",
                 user_id,
             )
         return row is not None
@@ -517,7 +517,7 @@ class Database:
             )
         return self._rows_to_list(rows)
 
-    async def get_all_deposits(self, status: str = "active", limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    async def get_all_deposits(self, status: str = "pending", limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         assert self.pool is not None
         async with self.pool.acquire() as conn:
             if status == "all":
