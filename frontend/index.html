@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GoodMoney</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+</head>
+<body>
+    <div id="app">
+        <!-- Loading -->
+        <div id="loading-screen" class="screen active">
+            <div class="loader-container">
+                <div class="vault-icon">
+                    <svg viewBox="0 0 64 64" width="80" height="80">
+                        <defs>
+                            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6C5CE7"/>
+                                <stop offset="100%" style="stop-color:#00D2FF"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="8" y="16" width="48" height="40" rx="6" fill="none" stroke="url(#grad)" stroke-width="3"/>
+                        <circle cx="32" cy="36" r="8" fill="none" stroke="url(#grad)" stroke-width="2.5"/>
+                        <line x1="32" y1="32" x2="32" y2="28" stroke="url(#grad)" stroke-width="2" stroke-linecap="round"/>
+                        <rect x="24" y="8" width="16" height="10" rx="3" fill="none" stroke="url(#grad)" stroke-width="2.5"/>
+                    </svg>
+                </div>
+                <div class="loader-spinner"></div>
+                <p class="loader-text" data-i18n="loading">Loading...</p>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard-screen" class="screen">
+            <div class="header">
+                <div class="header-top">
+                    <div class="logo">
+                        <span class="logo-icon">💰</span>
+                        <span class="logo-text">GoodMoney</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="lang-btn" onclick="toggleLanguage()">
+                            <span id="lang-label">EN</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="balance-card">
+                    <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                    <h1 class="balance-amount"><span id="balance-value">0.0000</span> TON</h1>
+                    <div class="balance-sub">
+                        <span data-i18n="earned">Earned</span>: <span id="total-earned">0.0000</span> TON
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-banner">
+                <div class="info-icon">🤖</div>
+                <div class="info-text">
+                    <p class="info-title" data-i18n="how_it_works">How it works</p>
+                    <p class="info-desc" data-i18n="legend">Our AI algorithms perform arbitrage trading across TON DEX platforms (DeDust, STON.fi), generating consistent returns from price differences.</p>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card">
+                    <span class="stat-icon">📈</span>
+                    <span class="stat-value" id="stat-profit">+10%</span>
+                    <span class="stat-label" data-i18n="profit">Profit</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">⏱</span>
+                    <span class="stat-value" id="stat-hours">10h</span>
+                    <span class="stat-label" data-i18n="maturity">Maturity</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">💰</span>
+                    <span class="stat-value" id="stat-min">10</span>
+                    <span class="stat-label" data-i18n="min_dep">Min Dep</span>
+                </div>
+            </div>
+
+            <div class="active-deposits" id="active-deposits-section" style="display:none">
+                <h3 data-i18n="active_deposits">Active Deposits</h3>
+                <div id="active-deposits-list"></div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary btn-large" onclick="navigate('deposit')">
+                    <span>💎</span> <span data-i18n="deposit">Deposit</span>
+                </button>
+                <button class="btn btn-secondary btn-large" onclick="navigate('withdraw')">
+                    <span>💸</span> <span data-i18n="withdraw">Withdraw</span>
+                </button>
+            </div>
+
+            <div class="games-grid">
+                <button class="game-card game-mines" onclick="navigate('mines')">
+                    <div class="game-card-icon">💣</div>
+                    <div class="game-card-title" data-i18n="mines_game">Mines</div>
+                    <div class="game-card-desc" data-i18n="mines_desc">Find safe cells</div>
+                </button>
+                <button class="game-card game-crash" onclick="navigate('crash')">
+                    <div class="game-card-icon">🚀</div>
+                    <div class="game-card-title" data-i18n="crash_game">Crash</div>
+                    <div class="game-card-desc" data-i18n="crash_desc">Cash out in time</div>
+                </button>
+                <button class="game-card game-pvp" onclick="navigate('pvp')">
+                    <div class="game-card-icon">⚔️</div>
+                    <div class="game-card-title" data-i18n="pvp_game">PvP Battle</div>
+                    <div class="game-card-desc" data-i18n="pvp_desc">Fight for the pot</div>
+                </button>
+            </div>
+
+            <div class="live-feed-section">
+                <h3 class="feed-title">
+                    <span class="live-dot"></span>
+                    <span data-i18n="live_feed">Live Feed</span>
+                </h3>
+                <div id="live-feed-list" class="live-feed-list"></div>
+            </div>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn active" onclick="navigate('dashboard')">
+                    <span class="nav-icon">🏠</span>
+                    <span data-i18n="home">Home</span>
+                </button>
+                <button class="nav-btn" onclick="navigate('history')">
+                    <span class="nav-icon">📋</span>
+                    <span data-i18n="history">History</span>
+                </button>
+                <button class="nav-btn" onclick="navigate('tasks')">
+                    <span class="nav-icon">✅</span>
+                    <span data-i18n="tasks">Tasks</span>
+                </button>
+                <button class="nav-btn" onclick="navigate('referral')">
+                    <span class="nav-icon">🤝</span>
+                    <span data-i18n="referrals">Referrals</span>
+                </button>
+                <button class="nav-btn" onclick="navigate('contest')">
+                    <span class="nav-icon">🎥</span>
+                    <span data-i18n="contest">Contest</span>
+                </button>
+                <button class="nav-btn" id="admin-nav-btn" style="display:none" onclick="navigate('admin')">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Admin</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Deposit Screen -->
+        <div id="deposit-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="make_deposit">Deposit & Invest</h2>
+            </div>
+
+            <!-- Invest from balance -->
+            <div class="deposit-info-card">
+                <h3 style="margin:0 0 8px" data-i18n="invest_title">📈 Create Investment</h3>
+                <p class="card-subtitle" data-i18n="invest_desc">Invest from your balance and earn profit after maturity</p>
+                <div class="deposit-stats">
+                    <div><span data-i18n="your_balance">Balance</span>: <b id="dep-balance">0 TON</b></div>
+                    <div><span data-i18n="min_deposit">Min invest</span>: <b id="dep-min">10 TON</b></div>
+                    <div><span data-i18n="profit_label">Profit</span>: <b id="dep-profit">+10%</b></div>
+                    <div><span data-i18n="maturity_label">Maturity</span>: <b id="dep-maturity">10h</b></div>
+                </div>
+                <div class="input-group" style="margin-top:12px">
+                    <label data-i18n="invest_amount">Investment amount (TON)</label>
+                    <input type="number" id="invest-amount" placeholder="10" min="10" step="0.01">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="createInvestment()">
+                    <span>📈</span> <span data-i18n="invest_btn">Invest</span>
+                </button>
+            </div>
+
+            <!-- Top-up balance -->
+            <div class="deposit-methods" style="margin-top:16px">
+                <h3 data-i18n="topup_title">💎 Top Up Balance</h3>
+                <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px" data-i18n="topup_desc">Send TON to top up your balance for investments and games</p>
+
+                <div class="manual-deposit-info">
+                    <p data-i18n="manual_desc">Send TON to the address below with the exact comment:</p>
+                    <div class="copy-field">
+                        <label data-i18n="wallet_address">Wallet Address</label>
+                        <div class="copy-row">
+                            <code id="deposit-address">Loading...</code>
+                            <button class="copy-btn" onclick="copyToClipboard('deposit-address')" data-i18n="copy">Copy</button>
+                        </div>
+                    </div>
+                    <div class="copy-field">
+                        <label data-i18n="comment">Comment (required!)</label>
+                        <div class="copy-row">
+                            <code id="deposit-comment">Loading...</code>
+                            <button class="copy-btn" onclick="copyToClipboard('deposit-comment')" data-i18n="copy">Copy</button>
+                        </div>
+                    </div>
+                    <div class="warning-box">
+                        <span>⚠️</span>
+                        <span data-i18n="comment_warning">Always include the comment! Deposits without correct comment cannot be matched to your account.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Withdraw Screen -->
+        <div id="withdraw-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="withdraw_title">Withdraw</h2>
+            </div>
+
+            <div class="withdraw-card">
+                <p class="balance-label" data-i18n="available_balance">Available Balance</p>
+                <h2 class="balance-amount"><span id="withdraw-balance">0.0000</span> TON</h2>
+            </div>
+
+            <div id="withdraw-no-deposit-warn" class="withdraw-warning" style="display:none">
+                <span>⚠️</span>
+                <span data-i18n="withdraw_need_deposit">To withdraw, you need at least one active deposit. Please make a deposit first.</span>
+            </div>
+
+            <div class="form-section">
+                <div class="input-group">
+                    <label data-i18n="amount">Amount (TON)</label>
+                    <input type="number" id="withdraw-amount" placeholder="1.0" min="1" step="0.01">
+                    <button class="max-btn" onclick="setMaxWithdraw()" data-i18n="max">MAX</button>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="ton_address">TON Address</label>
+                    <input type="text" id="withdraw-address" placeholder="UQ...">
+                </div>
+                <div class="fee-info">
+                    <span data-i18n="fee">Fee</span>: <span id="withdraw-fee">0.01</span> TON
+                </div>
+                <div class="fee-info">
+                    <span data-i18n="you_receive">You receive</span>: <span id="withdraw-net">0.00</span> TON
+                </div>
+                <button class="btn btn-primary btn-large" id="withdraw-submit-btn" onclick="submitWithdraw()">
+                    <span>💸</span> <span data-i18n="confirm_withdraw">Confirm Withdrawal</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- History Screen -->
+        <div id="history-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="history_title">History</h2>
+            </div>
+            <div class="tabs">
+                <button class="tab active" onclick="switchHistoryTab('deposits')" data-i18n="deposits">Deposits</button>
+                <button class="tab" onclick="switchHistoryTab('withdrawals')" data-i18n="withdrawals">Withdrawals</button>
+            </div>
+            <div id="history-deposits" class="history-list"></div>
+            <div id="history-withdrawals" class="history-list" style="display:none"></div>
+        </div>
+
+        <!-- Referral Screen -->
+        <div id="referral-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="referral_title">Referral Program</h2>
+            </div>
+
+            <div class="referral-card">
+                <div class="ref-icon">🤝</div>
+                <h3 data-i18n="invite_friends">Invite Friends & Earn</h3>
+                <p class="ref-desc" data-i18n="referral_desc">Get a percentage of your referrals' deposit profits!</p>
+                <div class="ref-stats">
+                    <div class="ref-stat">
+                        <span class="ref-stat-value" id="ref-percent">10%</span>
+                        <span class="ref-stat-label" data-i18n="commission">Commission</span>
+                    </div>
+                    <div class="ref-stat">
+                        <span class="ref-stat-value" id="ref-count">0</span>
+                        <span class="ref-stat-label" data-i18n="referrals">Referrals</span>
+                    </div>
+                    <div class="ref-stat">
+                        <span class="ref-stat-value" id="ref-earnings">0.00</span>
+                        <span class="ref-stat-label" data-i18n="earned">Earned</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="copy-field">
+                <label data-i18n="your_link">Your Referral Link</label>
+                <div class="copy-row">
+                    <code id="referral-link">Loading...</code>
+                    <button class="copy-btn" onclick="copyToClipboard('referral-link')" data-i18n="copy">Copy</button>
+                </div>
+            </div>
+
+            <div class="promo-banner">
+                <span class="promo-icon">🎉</span>
+                <div class="promo-text">
+                    <b data-i18n="milestone_title">Bonus: +1 TON for every 10 referrals!</b>
+                    <span data-i18n="milestone_desc">Invite 10 friends and get 1 TON bonus automatically</span>
+                    <span class="milestone-counter" id="milestone-progress">0/10 → 10</span>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-large" onclick="shareReferral()">
+                <span>📤</span> <span data-i18n="share">Share Link</span>
+            </button>
+
+            <div class="referral-list" id="referral-list-section" style="display:none">
+                <h3 data-i18n="your_referrals">Your Referrals</h3>
+                <div id="referral-list"></div>
+            </div>
+        </div>
+
+        <!-- Mines Game Screen -->
+        <div id="mines-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="mines_game">Mines</h2>
+            </div>
+
+            <div id="mines-setup" class="mines-setup">
+                <div class="mines-balance-card">
+                    <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                    <h2 class="balance-amount"><span id="mines-balance">0.0000</span> TON</h2>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="bet_amount">Bet (TON)</label>
+                    <input type="number" id="mines-bet" placeholder="0.1" min="0.1" step="0.1" value="0.1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="mines_count">Mines (1-24)</label>
+                    <div class="mines-presets">
+                        <button class="mines-preset active" onclick="setMinesCount(3)">3</button>
+                        <button class="mines-preset" onclick="setMinesCount(5)">5</button>
+                        <button class="mines-preset" onclick="setMinesCount(10)">10</button>
+                        <button class="mines-preset" onclick="setMinesCount(15)">15</button>
+                        <button class="mines-preset" onclick="setMinesCount(20)">20</button>
+                    </div>
+                    <input type="number" id="mines-count" value="3" min="1" max="24" style="margin-top:8px">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="startMinesGame()">
+                    <span>💣</span> <span data-i18n="start_game">Start Game</span>
+                </button>
+            </div>
+
+            <div id="mines-game-area" class="mines-game-area" style="display:none">
+                <div class="mines-info-bar">
+                    <div class="mines-info-item">
+                        <span data-i18n="bet_amount">Bet</span>: <b id="mines-current-bet">0</b> TON
+                    </div>
+                    <div class="mines-info-item">
+                        <span data-i18n="multiplier">Multiplier</span>: <b id="mines-multiplier">1.00</b>x
+                    </div>
+                    <div class="mines-info-item">
+                        <span data-i18n="profit_label">Profit</span>: <b id="mines-profit">0.0000</b> TON
+                    </div>
+                </div>
+                <div class="mines-next-mult">
+                    <span data-i18n="next_cell">Next</span>: <span id="mines-next-multiplier">-</span>x
+                </div>
+                <div id="mines-grid" class="mines-grid"></div>
+                <button class="btn btn-success btn-large" id="mines-cashout-btn" onclick="minesCashout()">
+                    <span>💰</span> <span data-i18n="cashout">Cashout</span> <span id="mines-cashout-amount">0.00</span> TON
+                </button>
+            </div>
+
+            <div class="mines-fairness" style="margin-top:16px">
+                <details>
+                    <summary data-i18n="provably_fair">Provably Fair</summary>
+                    <div class="fairness-info">
+                        <p>Server Seed Hash: <code id="mines-server-hash">-</code></p>
+                        <p>Client Seed: <code id="mines-client-seed">-</code></p>
+                        <p id="mines-server-seed-reveal" style="display:none">Server Seed: <code id="mines-server-seed">-</code></p>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <!-- Crash Game Screen -->
+        <div id="crash-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="crash_game">🚀 Crash</h2>
+            </div>
+
+            <div id="crash-setup" class="crash-setup">
+                <div class="crash-balance-card">
+                    <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                    <h2 class="balance-amount"><span id="crash-balance">0.0000</span> TON</h2>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="bet_amount">Bet (TON)</label>
+                    <input type="number" id="crash-bet" placeholder="0.1" min="0.1" step="0.1" value="0.1">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="startCrashGame()">
+                    <span>🚀</span> <span data-i18n="start_game">Start Game</span>
+                </button>
+                <div class="crash-history-section" style="margin-top:16px">
+                    <h3 data-i18n="recent_games">Recent Games</h3>
+                    <div id="crash-history-list" class="crash-history-list"></div>
+                </div>
+            </div>
+
+            <div id="crash-game-area" class="crash-game-area" style="display:none">
+                <div class="crash-display">
+                    <div class="crash-rocket-container">
+                        <canvas id="crash-canvas" width="340" height="220"></canvas>
+                    </div>
+                    <div class="crash-multiplier-display">
+                        <span id="crash-current-mult">1.00</span><span class="crash-x">x</span>
+                    </div>
+                    <div class="crash-bet-info">
+                        <span data-i18n="bet_amount">Bet</span>: <b id="crash-current-bet">0</b> TON
+                        &nbsp;|&nbsp;
+                        <span data-i18n="profit_label">Profit</span>: <b id="crash-current-profit">0.00</b> TON
+                    </div>
+                </div>
+                <button class="btn btn-success btn-large crash-cashout-btn" id="crash-cashout-btn" onclick="crashCashout()">
+                    💰 <span data-i18n="cashout">Cashout</span> <span id="crash-cashout-amount">0.00</span> TON
+                </button>
+            </div>
+
+            <div id="crash-result" class="crash-result" style="display:none">
+                <div id="crash-result-content"></div>
+                <button class="btn btn-primary btn-large" onclick="resetCrash()" style="margin-top:12px">
+                    <span>🔄</span> <span data-i18n="play_again">Play Again</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- PvP Battle Screen -->
+        <div id="pvp-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="pvp_game">⚔️ PvP Battle</h2>
+            </div>
+
+            <div class="pvp-balance-card">
+                <p class="balance-label" data-i18n="your_balance">Your Balance</p>
+                <h2 class="balance-amount"><span id="pvp-balance">0.0000</span> TON</h2>
+            </div>
+
+            <div id="pvp-main" class="pvp-main">
+                <div class="pvp-create-section">
+                    <h3 data-i18n="pvp_create">Create Battle</h3>
+                    <div class="input-group">
+                        <label data-i18n="bet_amount">Bet (TON)</label>
+                        <input type="number" id="pvp-bet" placeholder="0.1" min="0.1" step="0.1" value="0.5">
+                    </div>
+                    <div class="input-group">
+                        <label data-i18n="pvp_players">Players (2-10)</label>
+                        <div class="pvp-player-presets">
+                            <button class="pvp-preset active" onclick="setPvpPlayers(2)">2</button>
+                            <button class="pvp-preset" onclick="setPvpPlayers(3)">3</button>
+                            <button class="pvp-preset" onclick="setPvpPlayers(5)">5</button>
+                            <button class="pvp-preset" onclick="setPvpPlayers(10)">10</button>
+                        </div>
+                        <input type="number" id="pvp-max-players" value="2" min="2" max="10" style="margin-top:8px">
+                    </div>
+                    <div class="pvp-pot-info">
+                        <span data-i18n="pvp_pot">Pot</span>: <b id="pvp-pot-preview">1.0</b> TON
+                        <span class="pvp-commission">(5% <span data-i18n="fee">fee</span>)</span>
+                    </div>
+                    <button class="btn btn-primary btn-large" onclick="createPvpLobby()">
+                        ⚔️ <span data-i18n="pvp_create_btn">Create Battle</span>
+                    </button>
+                </div>
+
+                <div class="pvp-lobbies-section" style="margin-top:20px">
+                    <h3 data-i18n="pvp_open_battles">Open Battles</h3>
+                    <div id="pvp-lobbies-list" class="pvp-lobbies-list">
+                        <p class="empty-text" data-i18n="pvp_no_lobbies">No open battles right now</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pvp-lobby-view" class="pvp-lobby-view" style="display:none">
+                <div class="pvp-lobby-header">
+                    <h3>⚔️ <span data-i18n="pvp_battle">Battle</span> #<span id="pvp-lobby-id">0</span></h3>
+                    <div class="pvp-lobby-bet"><span id="pvp-lobby-bet-amount">0</span> TON</div>
+                </div>
+                <div class="pvp-lobby-status" id="pvp-lobby-status">
+                    <span data-i18n="pvp_waiting">Waiting for players...</span>
+                </div>
+                <div class="pvp-arena" id="pvp-arena" style="display:none">
+                    <canvas id="pvp-canvas" width="340" height="340"></canvas>
+                </div>
+                <div class="pvp-players-list" id="pvp-players-list"></div>
+                <div class="pvp-slots-info">
+                    <span id="pvp-slots-filled">0</span>/<span id="pvp-slots-total">0</span> <span data-i18n="pvp_players">players</span>
+                </div>
+                <div id="pvp-battle-result" class="pvp-battle-result" style="display:none"></div>
+                <div id="pvp-confetti-container" class="pvp-confetti-container"></div>
+                <button class="btn btn-primary btn-large" id="pvp-back-btn" onclick="pvpBackToMain()" style="margin-top:12px">
+                    ← <span data-i18n="back">Back</span>
+                </button>
+            </div>
+
+            <div class="pvp-history-section" style="margin-top:16px">
+                <h3 data-i18n="pvp_history">Battle History</h3>
+                <div id="pvp-history-list" class="pvp-history-list"></div>
+            </div>
+        </div>
+
+        <!-- Tasks Screen -->
+        <div id="tasks-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="tasks_title">📋 Tasks</h2>
+            </div>
+            <p class="screen-subtitle" data-i18n="tasks_desc">Complete tasks to earn TON rewards</p>
+            <div id="tasks-list" class="tasks-list">
+                <div class="loader-container"><div class="spinner"></div></div>
+            </div>
+        </div>
+
+        <!-- Contest Screen -->
+        <div id="contest-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2 data-i18n="contest_title">🎥 Video Contest</h2>
+            </div>
+
+            <div class="contest-rules-card">
+                <h3 data-i18n="contest_rules_title">📋 Rules</h3>
+                <div class="contest-rules-list">
+                    <div class="contest-rule">
+                        <span class="rule-num">1</span>
+                        <span data-i18n="contest_rule_1">Record a video of you playing Mines in GoodMoney</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">2</span>
+                        <span data-i18n="contest_rule_2">Upload to TikTok, Instagram Reels or YouTube Shorts</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">3</span>
+                        <span data-i18n="contest_rule_3">Add bot link in video description or comments: t.me/originalton_bot</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">4</span>
+                        <span data-i18n="contest_rule_4">Submit the video link below</span>
+                    </div>
+                    <div class="contest-rule">
+                        <span class="rule-num">5</span>
+                        <span data-i18n="contest_rule_5">Get 0.1 TON for every 100 views!</span>
+                    </div>
+                </div>
+                <div class="contest-reward-badge">
+                    <span>💰</span>
+                    <span data-i18n="contest_reward">100 views = 0.1 TON</span>
+                </div>
+            </div>
+
+            <div class="contest-submit-card">
+                <h3 data-i18n="contest_submit_title">📤 Submit Video</h3>
+                <div class="input-group">
+                    <label data-i18n="contest_url_label">Video URL (TikTok / Instagram / YouTube)</label>
+                    <input type="url" id="contest-url" placeholder="https://www.tiktok.com/@user/video/...">
+                </div>
+                <button class="btn btn-primary" onclick="submitContest()">
+                    <span>🚀</span> <span data-i18n="contest_submit_btn">Submit</span>
+                </button>
+                <div id="contest-submit-result"></div>
+            </div>
+
+            <div class="contest-my-submissions">
+                <h3 data-i18n="contest_my_videos">📹 My Videos</h3>
+                <div id="contest-list">
+                    <p style="color:var(--text-secondary);text-align:center" data-i18n="contest_no_videos">No videos submitted yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Screen -->
+        <div id="admin-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" onclick="navigate('dashboard')">←</button>
+                <h2>Admin Panel</h2>
+            </div>
+
+            <div class="admin-tabs">
+                <button class="admin-tab active" onclick="switchAdminTab('stats')">📊</button>
+                <button class="admin-tab" onclick="switchAdminTab('users')">👥</button>
+                <button class="admin-tab" onclick="switchAdminTab('withdrawals')">💸</button>
+                <button class="admin-tab" onclick="switchAdminTab('deposits')">💎</button>
+                <button class="admin-tab" onclick="switchAdminTab('contest')">🎥</button>
+                <button class="admin-tab" onclick="switchAdminTab('settings')">⚙️</button>
+                <button class="admin-tab" onclick="switchAdminTab('broadcast')">📢</button>
+                <button class="admin-tab" onclick="switchAdminTab('fakefeed')">📡</button>
+            </div>
+
+            <!-- Stats -->
+            <div id="admin-stats" class="admin-panel active">
+                <h3 style="margin-bottom:8px;font-size:14px;color:var(--text-secondary)">📊 Сегодня</h3>
+                <div class="admin-stats-grid">
+                    <div class="admin-stat today"><span class="admin-stat-label">Новые юзеры</span><span class="admin-stat-value" id="a-today-users">0</span></div>
+                    <div class="admin-stat today"><span class="admin-stat-label">Депозиты</span><span class="admin-stat-value" id="a-today-deposits">0</span></div>
+                    <div class="admin-stat today"><span class="admin-stat-label">Объём деп.</span><span class="admin-stat-value" id="a-today-dep-vol">0</span></div>
+                    <div class="admin-stat today"><span class="admin-stat-label">Выводы</span><span class="admin-stat-value" id="a-today-wd">0</span></div>
+                </div>
+                <h3 style="margin:12px 0 8px;font-size:14px;color:var(--text-secondary)">📈 Всего</h3>
+                <div class="admin-stats-grid">
+                    <div class="admin-stat"><span class="admin-stat-label">Users</span><span class="admin-stat-value" id="a-users">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Deposits</span><span class="admin-stat-value" id="a-deposits">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Deposit Vol</span><span class="admin-stat-value" id="a-dep-vol">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Profit Paid</span><span class="admin-stat-value" id="a-profit">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Pending Dep</span><span class="admin-stat-value" id="a-pending">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Withdrawals</span><span class="admin-stat-value" id="a-withdrawals">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Withdrawn</span><span class="admin-stat-value" id="a-withdrawn">0</span></div>
+                    <div class="admin-stat"><span class="admin-stat-label">Pending WD</span><span class="admin-stat-value" id="a-pending-wd">0</span></div>
+                </div>
+                <h3 style="margin:12px 0 8px;font-size:14px;color:var(--text-secondary)">💰 Финансы</h3>
+                <div class="admin-stats-grid">
+                    <div class="admin-stat highlight"><span class="admin-stat-label">Hot Wallet</span><span class="admin-stat-value" id="a-wallet">0</span></div>
+                    <div class="admin-stat highlight"><span class="admin-stat-label">Балансы юзеров</span><span class="admin-stat-value" id="a-total-balance">0</span></div>
+                </div>
+                <div class="admin-wallet-addr">
+                    <small>Wallet: <code id="a-wallet-addr">-</code></small>
+                </div>
+            </div>
+
+            <!-- Users -->
+            <div id="admin-users" class="admin-panel">
+                <div class="admin-search">
+                    <input type="text" id="admin-user-search" placeholder="🔍 Поиск по ID, имени или username..." oninput="debounceAdminSearch()">
+                </div>
+                <div class="admin-user-list" id="admin-user-list"></div>
+                <div class="admin-pagination">
+                    <button class="btn btn-small" onclick="adminUsersPage(-1)">← Prev</button>
+                    <span id="admin-users-page">1</span>
+                    <button class="btn btn-small" onclick="adminUsersPage(1)">Next →</button>
+                </div>
+            </div>
+
+            <!-- Withdrawals -->
+            <div id="admin-withdrawals" class="admin-panel">
+                <div class="admin-filter-row">
+                    <button class="admin-filter active" onclick="loadAdminWithdrawals('pending', this)">Pending</button>
+                    <button class="admin-filter" onclick="loadAdminWithdrawals('sent', this)">Sent</button>
+                    <button class="admin-filter" onclick="loadAdminWithdrawals('failed', this)">Failed</button>
+                </div>
+                <div id="admin-wd-list"></div>
+            </div>
+
+            <!-- Deposits -->
+            <div id="admin-deposits" class="admin-panel">
+                <div class="admin-filter-row">
+                    <button class="admin-filter active" onclick="loadAdminDeposits('active', this)">Active</button>
+                    <button class="admin-filter" onclick="loadAdminDeposits('matured', this)">Matured</button>
+                    <button class="admin-filter" onclick="loadAdminDeposits('all', this)">All</button>
+                </div>
+                <div id="admin-dep-list"></div>
+            </div>
+
+            <!-- Contest Admin -->
+            <div id="admin-contest" class="admin-panel">
+                <div class="admin-filter-row">
+                    <button class="admin-filter active" onclick="loadAdminContest('pending', this)">Pending</button>
+                    <button class="admin-filter" onclick="loadAdminContest('approved', this)">Approved</button>
+                    <button class="admin-filter" onclick="loadAdminContest('rejected', this)">Rejected</button>
+                    <button class="admin-filter" onclick="loadAdminContest('all', this)">All</button>
+                </div>
+                <div id="admin-contest-list"></div>
+            </div>
+
+            <!-- Settings -->
+            <div id="admin-settings" class="admin-panel">
+                <div class="settings-form" id="admin-settings-form"></div>
+                <button class="btn btn-primary" onclick="saveAdminSettings()">Save Settings</button>
+            </div>
+
+            <!-- Broadcast -->
+            <div id="admin-broadcast" class="admin-panel">
+                <div class="input-group">
+                    <label>📢 Рассылка всем (HTML)</label>
+                    <textarea id="broadcast-message" rows="5" placeholder="Введите сообщение..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="sendBroadcast()">Отправить всем</button>
+                <div id="broadcast-result"></div>
+
+                <hr style="border-color:var(--border);margin:20px 0">
+
+                <h3 style="font-size:14px;margin-bottom:12px">✉️ Личное сообщение</h3>
+                <div class="input-group">
+                    <label>User ID</label>
+                    <input type="number" id="dm-user-id" placeholder="Telegram User ID">
+                </div>
+                <div class="input-group">
+                    <label>Сообщение (HTML)</label>
+                    <textarea id="dm-message" rows="3" placeholder="Введите сообщение..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="sendDM()">Отправить</button>
+                <div id="dm-result"></div>
+            </div>
+
+            <!-- Fake Feed -->
+            <div id="admin-fakefeed" class="admin-panel">
+                <p style="color:var(--text-secondary);margin-bottom:12px" data-i18n="fake_feed_desc">Schedule fake entries that appear gradually in the public feed</p>
+                <div id="fake-feed-status" style="display:none;padding:10px;border-radius:8px;background:rgba(108,92,231,0.2);margin-bottom:12px">
+                    <span style="color:var(--primary)">⏳</span> <span id="fake-status-text"></span>
+                    <button class="btn btn-accent" style="margin-left:8px;padding:4px 12px;font-size:12px" onclick="stopFakeFeed()">Stop</button>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_type">Type</label>
+                    <select id="fake-type">
+                        <option value="deposit">💎 Deposit</option>
+                        <option value="payout">💰 Payout</option>
+                        <option value="withdrawal">💸 Withdrawal</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_count">Count</label>
+                    <input type="number" id="fake-count" value="10" min="1" max="200" step="1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_period">Period (minutes)</label>
+                    <input type="number" id="fake-period" value="30" min="1" step="1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_min_amount">Min amount (TON)</label>
+                    <input type="number" id="fake-min-amount" value="10" min="0.1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_max_amount">Max amount (TON)</label>
+                    <input type="number" id="fake-max-amount" value="100" min="0.1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label data-i18n="fake_maturity">Maturity (hours, for deposit)</label>
+                    <input type="number" id="fake-maturity" value="10" min="0.1" step="0.1">
+                </div>
+                <button class="btn btn-primary" onclick="launchFakeFeed()">🚀 <span data-i18n="fake_launch">Launch</span></button>
+                <div id="fake-feed-result"></div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="/js/i18n.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
